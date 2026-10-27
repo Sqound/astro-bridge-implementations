@@ -1,0 +1,20 @@
+# Rootful Linux Docker Engine on a dedicated network host. Run host-install.py first.
+services:
+  astro-bridge:
+    image: astro-bridge:1.0.0-linux
+    container_name: astro-bridge
+    network_mode: host
+    pid: host
+    devices:
+      - /dev/rfkill:/dev/rfkill
+    cap_add: [NET_ADMIN, NET_RAW]
+    security_opt: [no-new-privileges:true]
+    environment:
+      ASTRO_BRIDGE_PLATFORM: docker
+    volumes:
+      - /run/dbus:/run/dbus:ro
+      - /run/systemd:/run/systemd:ro
+      - /etc/NetworkManager/system-connections:/etc/NetworkManager/system-connections
+      - /etc/wifi-bridge:/etc/wifi-bridge:ro
+      - /var/lib/wifi-bridge:/var/lib/wifi-bridge
+    restart: unless-stopped

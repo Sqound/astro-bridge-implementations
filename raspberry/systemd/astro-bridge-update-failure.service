@@ -1,0 +1,7 @@
+[Unit]
+Description=Restore Astro Bridge after an interrupted updater
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/lib/astro-bridge/ota.py recover
+ExecStartPost=/usr/bin/systemctl --no-block start wifi-bridge.service
+UMask=0077

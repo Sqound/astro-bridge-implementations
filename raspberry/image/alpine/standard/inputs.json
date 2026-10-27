@@ -1,0 +1,14 @@
+{
+  "container": "alpine@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6",
+  "aports_url": "https://github.com/alpinelinux/aports.git",
+  "aports_commit": "2c461d47ec384165edca1c1e48add34e35dcf9e6",
+  "repositories": [
+    "https://dl-cdn.alpinelinux.org/alpine/v3.24/main",
+    "https://dl-cdn.alpinelinux.org/alpine/v3.24/community"
+  ],
+  "architecture": "armhf",
+  "image_bytes": 1610612736,
+  "boot_offset": 1048576,
+  "boot_bytes": 536870912,
+  "data_offset": 537919488
+}

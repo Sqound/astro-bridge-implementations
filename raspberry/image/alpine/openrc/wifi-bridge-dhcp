@@ -1,0 +1,10 @@
+#!/sbin/openrc-run
+name="Astro Bridge setup DHCP"
+command="/usr/sbin/dnsmasq"
+command_args="--keep-in-foreground --conf-file=/var/lib/wifi-bridge/dnsmasq.conf"
+supervisor="supervise-daemon"
+respawn_delay=2
+respawn_max=0
+output_log="/var/log/wifi-bridge-dhcp.log"
+error_log="/var/log/wifi-bridge-dhcp.log"
+depend() { need dbus; }

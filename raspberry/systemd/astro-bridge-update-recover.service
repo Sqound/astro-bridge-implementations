@@ -1,0 +1,9 @@
+[Unit]
+Description=Recover interrupted Astro Bridge application update
+Before=wifi-bridge.service
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/lib/astro-bridge/ota.py recover
+UMask=0077
+[Install]
+WantedBy=multi-user.target

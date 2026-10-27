@@ -1,0 +1,13 @@
+services:
+  astro-bridge:
+    image: astro-bridge:1.0.0-demo
+    container_name: astro-bridge-demo
+    ports:
+      - "127.0.0.1:8787:8787"
+    volumes:
+      - demo-state:/var/lib/wifi-bridge
+    restart: unless-stopped
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+volumes:
+  demo-state:

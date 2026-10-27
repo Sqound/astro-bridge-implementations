@@ -1,0 +1,8 @@
+[Unit]
+Description=Check Astro Bridge releases daily
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=24h
+RandomizedDelaySec=15min
+[Install]
+WantedBy=timers.target

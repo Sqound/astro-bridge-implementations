@@ -1,0 +1,7 @@
+{
+  "branch": "v3.24",
+  "version": "3.24.2",
+  "architecture": "armhf",
+  "rootfs": {"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/releases/armhf/alpine-minirootfs-3.24.2-armhf.tar.gz", "sha256": "d86af88b58954d8a90c211004f1e61f208a62d1bb5a2f525f0c1cc26408ab92b"},
+  "boot": {"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/releases/armhf/alpine-rpi-3.24.2-armhf.tar.gz", "sha256": "f9a32d33f4c6677d7e3b417336b7c245bd594bf67d23de2c4faff697690bad3f"}
+}

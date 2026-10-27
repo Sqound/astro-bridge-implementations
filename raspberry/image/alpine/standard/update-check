@@ -1,0 +1,3 @@
+#!/bin/sh
+# OpenRC crond runs this fixed root task. No repository credentials are stored.
+exec /usr/bin/python3 /usr/libexec/astro-bridge-ota check

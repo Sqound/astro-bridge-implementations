@@ -1,0 +1,16 @@
+[Unit]
+Description=Astro Bridge — WPA2 configuration and recovery access point
+After=NetworkManager.service wifi-bridge.service
+PartOf=wifi-bridge.service
+
+[Service]
+Type=simple
+ExecStart=/usr/sbin/hostapd /var/lib/wifi-bridge/hostapd.conf
+Restart=on-failure
+RestartSec=2
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+ReadWritePaths=/var/lib/wifi-bridge

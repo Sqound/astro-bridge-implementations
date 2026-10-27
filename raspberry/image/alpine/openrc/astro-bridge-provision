@@ -1,0 +1,27 @@
+#!/sbin/openrc-run
+name="Astro Bridge persistent application setup"
+description="Seed the writable application volume before Astro Bridge starts"
+
+depend() { need localmount; before sshd chronyd wifi-bridge; }
+
+start() {
+    if [ -f /etc/wifi-bridge/diskless ]; then
+        /usr/bin/python3 /usr/libexec/astro-bridge-persist boot || return $?
+    elif ! id bridge >/dev/null 2>&1; then
+        # Preserve the older persistent-root image path, provisioned at build time.
+        adduser -D -h /home/bridge -s /bin/ash -G wheel bridge
+        printf '%s\n' 'bridge:12345678' | chpasswd
+        printf '%s\n' 'bridge ALL=(ALL:ALL) ALL' > /etc/sudoers.d/bridge
+        chmod 440 /etc/sudoers.d/bridge
+    fi
+    checkpath -d -m 0700 /var/lib/wifi-bridge/app
+    if [ ! -f /var/lib/wifi-bridge/app/wifi_bridge/__init__.py ]; then
+        cp -a /opt/wifi-bridge/wifi_bridge /var/lib/wifi-bridge/app/
+    fi
+}
+
+stop() {
+    if [ -f /etc/wifi-bridge/diskless ]; then
+        /usr/bin/python3 /usr/libexec/astro-bridge-persist checkpoint
+    fi
+}

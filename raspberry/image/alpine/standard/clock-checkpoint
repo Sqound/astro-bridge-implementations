@@ -1,0 +1,3 @@
+#!/bin/sh
+# Last observed wall time is an offline lower bound, never proof of NTP sync.
+exec /usr/bin/python3 /usr/libexec/astro-bridge-persist checkpoint

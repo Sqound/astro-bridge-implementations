@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+build/
+dist/
+.env
+.env.*
+*.img
+*.img.xz
+*.whl
+*access.txt
+bootstrap.json
+.DS_Store
+raspberry/image/cache/
+raspberry/image/work/
+.runtime/
+artifacts/
+*.apk

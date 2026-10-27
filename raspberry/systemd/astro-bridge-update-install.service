@@ -1,0 +1,10 @@
+[Unit]
+Description=Install an Astro Bridge application release
+Wants=network-online.target
+After=network-online.target
+OnFailure=astro-bridge-update-failure.service
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/lib/astro-bridge/ota.py install
+TimeoutStartSec=10min
+UMask=0077

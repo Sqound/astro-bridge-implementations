@@ -1,0 +1,19 @@
+#!/sbin/openrc-run
+name="Astro Bridge"
+description="Smart telescope Wi-Fi appliance"
+command="/usr/bin/python3"
+command_args="-m wifi_bridge"
+directory="/var/lib/wifi-bridge/app"
+supervisor="supervise-daemon"
+respawn_delay=8
+respawn_max=0
+output_log="/var/log/wifi-bridge.log"
+error_log="/var/log/wifi-bridge.log"
+depend() { need dbus networkmanager astro-bridge-provision; after avahi-daemon sshd; }
+start_pre() {
+    if [ -f /etc/wifi-bridge/diskless ]; then
+        /usr/bin/python3 /usr/libexec/astro-bridge-ota recover || return $?
+    fi
+    checkpath -d -m 0700 /var/lib/wifi-bridge; /usr/sbin/rfkill unblock wifi
+}
+stop_post() { rc-service wifi-bridge-ap stop; rc-service wifi-bridge-dhcp stop; return 0; }

@@ -1,0 +1,16 @@
+#!/sbin/openrc-run
+name="Grow Astro Bridge root partition once"
+depend() { after localmount; before wifi-bridge; }
+start() {
+    [ ! -e /var/lib/wifi-bridge/root-expanded ] || return 0
+    # This image has a fixed two-partition microSD layout; refuse other devices.
+    root="$(findmnt -n -o SOURCE /)"
+    [ "$root" = /dev/mmcblk0p2 ] || return 0
+    sfdisk --no-reread --force -N 2 /dev/mmcblk0 <<PARTITION
+, +
+PARTITION
+    partx -u /dev/mmcblk0 || true
+    resize2fs /dev/mmcblk0p2 || return 1
+    mkdir -p /var/lib/wifi-bridge
+    touch /var/lib/wifi-bridge/root-expanded
+}

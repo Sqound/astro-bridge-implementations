@@ -1,0 +1,22 @@
+name: Implementation checks
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  implementations:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.13'
+      - run: python tools/core-artifact.py fetch --output build/core
+      - run: python tools/test-platforms.py --wheel build/core/astro_bridge_core-1.0.0-py3-none-any.whl
+      - run: python tools/verify-staging.py --wheel build/core/astro_bridge_core-1.0.0-py3-none-any.whl
+      - run: python docker/build.py --wheel build/core/astro_bridge_core-1.0.0-py3-none-any.whl --target demo
+      - run: python tools/test-docker.py
+      - run: python docker/build.py --wheel build/core/astro_bridge_core-1.0.0-py3-none-any.whl --target linux
+      - run: python tools/core-artifact.py fetch --source --output build/core
+      - run: python tools/test-linux-network.py --wheel build/core/astro_bridge_core-1.0.0-py3-none-any.whl --source build/core/astro_bridge_core-1.0.0.tar.gz

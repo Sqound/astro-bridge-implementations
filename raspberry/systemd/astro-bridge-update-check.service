@@ -1,0 +1,10 @@
+[Unit]
+Description=Check Astro Bridge GitHub releases
+Wants=network-online.target
+After=network-online.target
+OnFailure=astro-bridge-update-failure.service
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/lib/astro-bridge/ota.py check
+TimeoutStartSec=10min
+UMask=0077
