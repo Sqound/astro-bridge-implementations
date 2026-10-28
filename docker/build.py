@@ -16,7 +16,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix='astro-docker-') as temp:
         context=Path(temp)
         for source,name in ((args.wheel,'core.whl'),(ROOT/'core.lock.json','core.lock.json'),(ROOT/'docker/Dockerfile','Dockerfile'),(ROOT/'linux/tls.py','tls.py'),(ROOT/'docker/entrypoint.py','entrypoint.py'),(ROOT/'linux/build-conntrack.py','build-conntrack.py')):shutil.copyfile(source,context/name)
-        subprocess.run(['docker','build','--target',args.target,'--tag',args.tag or 'astro-bridge:1.0.0-'+args.target,str(context)],check=True)
+        subprocess.run(['docker','build','--target',args.target,'--tag',args.tag or 'astro-bridge:1.0.1-'+args.target,str(context)],check=True)
 
 
 if __name__=='__main__':main()

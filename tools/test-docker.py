@@ -19,7 +19,7 @@ def main():
     url='http://127.0.0.1:'+str(port);command('volume','create',volume)
     try:
         for cycle in range(2):
-            command('run','-d','--name',name,'--cap-drop','ALL','--security-opt','no-new-privileges','-p',f'127.0.0.1:{port}:8787','-v',volume+':/var/lib/wifi-bridge','astro-bridge:1.0.0-demo')
+            command('run','-d','--name',name,'--cap-drop','ALL','--security-opt','no-new-privileges','-p',f'127.0.0.1:{port}:8787','-v',volume+':/var/lib/wifi-bridge','astro-bridge:1.0.1-demo')
             client=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
             def call(path,data=None,csrf=None):
                 headers={'Host':'127.0.0.1:8787','Origin':'http://127.0.0.1:8787','Content-Type':'application/json'}

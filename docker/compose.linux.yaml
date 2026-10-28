@@ -1,8 +1,7 @@
 # Rootful Linux Docker Engine on a dedicated network host. Run host-install.py first.
 services:
   astro-bridge:
-    image: astro-bridge:1.0.0-linux
-    container_name: astro-bridge
+    image: astro-bridge:1.0.1-linux
     network_mode: host
     pid: host
     devices:

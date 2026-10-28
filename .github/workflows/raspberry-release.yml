@@ -1,0 +1,32 @@
+name: Build Raspberry release image
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  image:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 180
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.13'
+      - run: df -h && docker info
+      - run: python tools/core-artifact.py fetch --output build/core
+      - run: python tools/build-raspberry.py --wheel build/core/astro_bridge_core-1.0.1-py3-none-any.whl --stage build/pi-release --build
+      - name: Collect exact package recipes and verified upstream source archives
+        run: python tools/collect-image-sources.py --image-dir build/pi-release/dist/standard-1.0.1 --output build/os-sources
+      - run: python tools/package-release.py --wheel build/core/astro_bridge_core-1.0.1-py3-none-any.whl --pi-candidate build/pi-release/dist/standard-1.0.1 --ota-stage build/pi-release --output dist/pi
+      - name: Require matching draft and upload image with its sources
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          version=$(cat VERSION)
+          test "$(gh release view "v$version" --json isDraft --jq .isDraft)" = true
+          gh release upload "v$version" dist/pi/*.img.xz dist/pi/alpine-standard-manifest.json dist/pi/ALPINE-STANDARD-SHA256SUMS dist/pi/source.json dist/pi-sources/* --clobber

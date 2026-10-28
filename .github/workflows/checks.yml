@@ -13,10 +13,11 @@ jobs:
         with:
           python-version: '3.13'
       - run: python tools/core-artifact.py fetch --output build/core
-      - run: python tools/test-platforms.py --wheel build/core/astro_bridge_core-1.0.0-py3-none-any.whl
-      - run: python tools/verify-staging.py --wheel build/core/astro_bridge_core-1.0.0-py3-none-any.whl
-      - run: python docker/build.py --wheel build/core/astro_bridge_core-1.0.0-py3-none-any.whl --target demo
+      - run: python tools/test-platforms.py --wheel build/core/astro_bridge_core-1.0.1-py3-none-any.whl
+      - run: python tools/verify-staging.py --wheel build/core/astro_bridge_core-1.0.1-py3-none-any.whl
+      - run: python docker/build.py --wheel build/core/astro_bridge_core-1.0.1-py3-none-any.whl --target demo
       - run: python tools/test-docker.py
-      - run: python docker/build.py --wheel build/core/astro_bridge_core-1.0.0-py3-none-any.whl --target linux
+      - run: python tools/test-docker-installer.py
+      - run: python docker/build.py --wheel build/core/astro_bridge_core-1.0.1-py3-none-any.whl --target linux
       - run: python tools/core-artifact.py fetch --source --output build/core
-      - run: python tools/test-linux-network.py --wheel build/core/astro_bridge_core-1.0.0-py3-none-any.whl --source build/core/astro_bridge_core-1.0.0.tar.gz
+      - run: python tools/test-linux-network.py --wheel build/core/astro_bridge_core-1.0.1-py3-none-any.whl --source build/core/astro_bridge_core-1.0.1.tar.gz

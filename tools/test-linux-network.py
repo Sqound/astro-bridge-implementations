@@ -14,7 +14,7 @@ CASES=('linux_profiles.py','linux_forwarding.py','linux_multi_forwarding.py','li
 
 
 def main():
-    p=argparse.ArgumentParser();p.add_argument('--wheel',type=Path,required=True);p.add_argument('--source',type=Path,required=True);p.add_argument('--image',default='astro-bridge:1.0.0-linux');args=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument('--wheel',type=Path,required=True);p.add_argument('--source',type=Path,required=True);p.add_argument('--image',default='astro-bridge:1.0.1-linux');args=p.parse_args()
     lock=core.verified(args.wheel)
     if hashlib.sha256(args.source.read_bytes()).hexdigest()!=lock['source_sha256']:raise ValueError('Core source checksum mismatch')
     staging=ROOT/'build';staging.mkdir(exist_ok=True)

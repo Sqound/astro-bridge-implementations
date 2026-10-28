@@ -1,0 +1,44 @@
+name: Build release flashers
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  flasher:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-22.04, ubuntu-24.04-arm, windows-2025, macos-15, macos-15-intel]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.13'
+      - name: Install build dependencies
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then sudo apt-get update && sudo apt-get install -y xvfb xauth python3-tk; fi
+          python -m pip install pyinstaller==6.16.0 certifi==2026.10.19
+      - run: python tools/core-artifact.py fetch --output build/core
+      - name: Compile and verify actual platform executable
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then
+            xvfb-run -a python tools/build-flasher.py --wheel build/core/astro_bridge_core-1.0.1-py3-none-any.whl
+          else
+            python tools/build-flasher.py --wheel build/core/astro_bridge_core-1.0.1-py3-none-any.whl
+          fi
+      - name: Upload only to the matching draft release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          version=$(cat VERSION)
+          test "$(gh release view "v$version" --json isDraft --jq .isDraft)" = true
+          gh release upload "v$version" dist/flashers/* --clobber

@@ -1,9 +1,13 @@
 services:
   astro-bridge:
-    image: astro-bridge:1.0.0-demo
-    container_name: astro-bridge-demo
+    image: astro-bridge:1.0.1-demo
     ports:
-      - "127.0.0.1:8787:8787"
+      - "127.0.0.1:${ASTRO_BRIDGE_PORT:-8787}:${ASTRO_BRIDGE_PORT:-8787}"
+    environment:
+      ASTRO_BRIDGE_PORT: ${ASTRO_BRIDGE_PORT:-8787}
+    command: ["--demo", "--bind", "0.0.0.0", "--port", "${ASTRO_BRIDGE_PORT:-8787}", "--state-dir", "/var/lib/wifi-bridge"]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:'+os.environ['ASTRO_BRIDGE_PORT']+'/',timeout=2).read()"]
     volumes:
       - demo-state:/var/lib/wifi-bridge
     restart: unless-stopped

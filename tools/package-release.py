@@ -29,6 +29,12 @@ def main():
             if path.is_symlink():raise ValueError('Source symlink')
             data=path.read_bytes();item=tarfile.TarInfo(f'astro_bridge_implementations-{version}/'+name);item.size=len(data);item.mode=0o755 if path.stat().st_mode & 0o111 else 0o644;archive.addfile(item,io.BytesIO(data))
     artifacts={target.name:digest(target)}
+    installer=args.output/'install-docker.py'
+    installer.write_text((ROOT/'tools/install-docker.py').read_text().replace('SOURCE_SHA256 = None', 'SOURCE_SHA256 = '+repr(digest(target)))
+        +'\n'+''.join('# '+line+'\n' for line in (ROOT/'LICENSE').read_text().splitlines()))
+    wrapper=args.output/'install-docker.sh'
+    wrapper.write_text((ROOT/'tools/install-docker.sh').read_text().replace('__DOCKER_INSTALLER_SHA256__',digest(installer)))
+    artifacts.update({installer.name:digest(installer),wrapper.name:digest(wrapper)})
     if args.pi_candidate:
         if not args.wheel or digest(args.wheel)!=lock['sha256']:raise ValueError('Matching core wheel required')
         with zipfile.ZipFile(args.wheel) as archive:build=re.search(r'[0-9a-f]{64}',archive.read('wifi_bridge/build.py').decode())[0]

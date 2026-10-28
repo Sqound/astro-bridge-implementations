@@ -13,8 +13,8 @@ Application/UI/protocol changes and declarative device plugins belong in [Core](
 
 ```sh
 python3 tools/core-artifact.py fetch
-python3 tools/test-platforms.py --wheel build/core/astro_bridge_core-1.0.0-py3-none-any.whl
-python3 tools/verify-staging.py --wheel build/core/astro_bridge_core-1.0.0-py3-none-any.whl
+python3 tools/test-platforms.py --wheel build/core/astro_bridge_core-1.0.1-py3-none-any.whl
+python3 tools/verify-staging.py --wheel build/core/astro_bridge_core-1.0.1-py3-none-any.whl
 ```
 
 Contributions to the original project are made under the [MIT License](LICENSE).

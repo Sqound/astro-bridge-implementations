@@ -689,6 +689,7 @@ def main():
     parser.add_argument('--list-disks', action='store_true', help='List eligible removable drives without writing')
     parser.add_argument('--flash-worker', type=Path, help=argparse.SUPPRESS)
     parser.add_argument('--gui', action='store_true', help='Open the native preparation window')
+    parser.add_argument('--self-test', action='store_true', help='Check the bundled GUI and TLS runtime without accessing disks')
     parser.add_argument('--image', type=Path, help='Local .img/.img.xz (offline mode)')
     sums=parser.add_mutually_exclusive_group()
     sums.add_argument('--sha256', help='Expected SHA-256 for a local image')
@@ -697,6 +698,12 @@ def main():
     parser.add_argument('--cache', type=Path, default=Path.home() / 'Downloads/Astro-Bridge')
     parser.add_argument('--verify-only', action='store_true', help='Verify without launching or writing a disk')
     args = parser.parse_args()
+    if args.self_test:
+        import tkinter
+        window = tkinter.Tk(); window.withdraw(); window.update_idletasks(); window.destroy()
+        network_context()
+        print('PASS GUI and TLS runtime; no disk access')
+        return
     if args.list_disks:
         print(json.dumps(disks(), indent=2))
         return

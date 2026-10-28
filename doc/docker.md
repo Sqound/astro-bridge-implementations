@@ -2,11 +2,33 @@
 
 [Documentation](README.md) / Docker
 
+## Use the installer
+
+The installer prints a plan by default. On a dedicated Debian/Ubuntu Linux host:
+
+```sh
+curl -fLO https://github.com/Sqound/astro-bridge-implementations/releases/download/v1.0.1/install-docker.sh
+sh install-docker.sh --mode linux
+# Review the plan, then install dependencies and deploy:
+sudo sh install-docker.sh --mode linux --apply
+```
+
+If needed, the wrapper installs Python/curl. The installer uses Docker's signed package repository for Engine/Compose, prepares the Linux host dependencies, downloads the checksum-pinned implementation and core releases, builds the container and starts Compose. It preserves existing deployment directories and keeps state in persistent storage.
+
+For the portable demo, use `--mode demo`. macOS/Windows use Docker Desktop; the Python installer can install it through an available Homebrew/winget installation. Complete Docker Desktop's first-run setup or required reboot, then rerun the installer. Native Windows Wi-Fi management is unsupported.
+
+```sh
+python3 install-docker.py --mode demo
+python3 install-docker.py --mode demo --apply
+```
+
+The release's `install-docker.py` embeds the deployment source checksum. Offline source can be supplied with `--source ARCHIVE --sha256 DIGEST`; the core wheel still needs its pinned download or cache.
+
 ## Try the demo
 
 ```sh
 python3 tools/core-artifact.py fetch
-python3 docker/build.py --wheel build/core/astro_bridge_core-1.0.0-py3-none-any.whl --target demo
+python3 docker/build.py --wheel build/core/astro_bridge_core-1.0.1-py3-none-any.whl --target demo
 docker compose -f docker/compose.demo.yaml up -d
 ```
 
@@ -28,7 +50,7 @@ Use a **dedicated rootful Linux Docker Engine host** with systemd, NetworkManage
 # Inspect the host changes first.
 sudo python3 linux/host-install.py --mode docker
 sudo python3 linux/host-install.py --mode docker --apply
-python3 docker/build.py --wheel build/core/astro_bridge_core-1.0.0-py3-none-any.whl --target linux
+python3 docker/build.py --wheel build/core/astro_bridge_core-1.0.1-py3-none-any.whl --target linux
 docker compose -f docker/compose.linux.yaml up -d
 ```
 

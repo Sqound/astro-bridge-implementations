@@ -33,6 +33,7 @@ def stage(wheel,destination):
     destination.mkdir(parents=True)
     # Fixed deployment recipes + extracted application, not a tracked fork of core.
     shutil.copytree(ROOT/'raspberry',destination,dirs_exist_ok=True)
+    shutil.copyfile(ROOT/'LICENSE',destination/'LICENSE')
     names=set();total=0
     with zipfile.ZipFile(wheel) as archive:
         for info in archive.infolist():

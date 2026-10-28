@@ -5,6 +5,7 @@
 | Guide | Read when |
 | --- | --- |
 | [Docker](docker.md) | Trying the app or running the Linux container integration |
+| [Native flashers](flasher.md) | Preparing SD cards on Windows, macOS or Linux |
 | [Raspberry Pi Zero W](raspberry.md) | Building a dedicated diskless SD appliance |
 | [Native Linux](linux.md) | Installing without Docker |
 | [Updates and recovery](updates.md) | Replacing a verified artifact or using appliance OTA |

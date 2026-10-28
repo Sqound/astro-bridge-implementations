@@ -99,6 +99,8 @@ apk --arch armhf --root "$job/closure" --keys-dir "$job/keys" --repositories-fil
   --no-network --repository "$job/boot/apks" add --initdb --no-scripts $world
 apk --root "$job/closure" query --installed --format json '*' > /out/target-packages.json
 apk --root "$job/mkimage/apkroot-armhf" query --format json linux-rpi linux-firmware raspberrypi-bootloader raspberrypi-bootloader-common > /out/kernel-packages.json
+apk --root "$job/closure" query --installed --format json --fields name,version,origin,license,commit '*' > /out/source-packages.json
+apk --root "$job/mkimage/apkroot-armhf" query --format json --fields name,version,origin,license,commit linux-rpi linux-firmware raspberrypi-bootloader raspberrypi-bootloader-common > /out/source-kernel-packages.json
 unsquashfs -ll "$job/boot/boot/modloop-rpi" > "$job/modules.txt"
 python3 "$helper" inspect "$job/boot" "$job/closure" /out/target-packages.json "$job/modules.txt" "$job/keys" /out/assembled.json
 # Keep immutable payload/index identities for exact version/hash pinning, not a

@@ -22,13 +22,26 @@ This repository provides deployment recipes for [Astro Bridge Core](https://gith
 
 One adapter is needed per simultaneous Wi-Fi role. A private Wi-Fi uplink, hotspot and one telescope uplink normally use three adapters. Read [platform requirements](doc/platform-contract.md) before assigning existing host interfaces.
 
+## Download ready-to-use files
+
+Use the [1.0.1 release](https://github.com/Sqound/astro-bridge-implementations/releases/tag/v1.0.1).
+
+| Goal | Download |
+| --- | --- |
+| Prepare a Pi Zero W SD card | [Native flasher for Windows, macOS or Linux](doc/flasher.md), or the `.img.xz` image for Raspberry Pi Imager |
+| Deploy Docker on a Linux PC | `install-docker.sh`; plans first, installs dependencies and starts the chosen deployment with `--apply` |
+| Run the Docker demo on macOS/Windows | `install-docker.py`; Docker Desktop setup may require a first-run action or OS reboot |
+| Update an existing compatible appliance | Alpine armhf application-only OTA and its manifest |
+
+Verify downloaded files with the release's `SHA256SUMS`. The [Raspberry guide](doc/raspberry.md) and [Docker installer guide](doc/docker.md) give the exact steps.
+
 ## Try Docker without hardware
 
 Install Docker, clone this repository, then run:
 
 ```sh
 python3 tools/core-artifact.py fetch
-python3 docker/build.py --wheel build/core/astro_bridge_core-1.0.0-py3-none-any.whl --target demo
+python3 docker/build.py --wheel build/core/astro_bridge_core-1.0.1-py3-none-any.whl --target demo
 docker compose -f docker/compose.demo.yaml up -d
 ```
 
@@ -60,9 +73,9 @@ The [Core user documentation](https://github.com/Sqound/astro-bridge-core/tree/m
 
 ## Releases and reproducibility
 
-`core.lock.json` records the core wheel and source-archive version, URLs and SHA-256 digests. Builders verify the artifact before extraction. The first release includes implementation source, the application-only Alpine OTA archive, manifests and checksums.
+`core.lock.json` records the core wheel and source-archive version, URLs and SHA-256 digests. Builders verify the artifact before extraction. Releases include implementation source, the application-only Alpine OTA, a Raspberry Pi Zero W SD image, native flashers, Docker installers, manifests and checksums.
 
-The full SD recipe is provided for local builds. A prebuilt SD image is not included in this release: fresh-image hardware validation and complete corresponding-source packaging for OS components remain separate release work. The original source license does not relicense a Linux distribution or firmware.
+The SD image is accompanied by exact signed-package recipe revisions and checksum-verified upstream source archives. Image structure, package signatures and application identity are checked during construction. A freshly flashed physical board remains a separate acceptance step. OS packages and firmware retain their own licenses.
 
 Core wheel and source exports are deterministic. The SD builder records base/aports inputs, package closure, geometry and build identity; ephemeral index signing and distribution timestamps prevent a byte-reproducibility claim for the complete image.
 

@@ -1,11 +1,11 @@
 {
   "format": 1,
   "package": "astro-bridge-core",
-  "version": "1.0.0",
-  "asset": "astro_bridge_core-1.0.0-py3-none-any.whl",
-  "sha256": "5b2f2d2eabe6baa12b7e3e3c3ad85430d19b98a1502c82bdf1ef2e0f4df2c391",
-  "url": "https://github.com/Sqound/astro-bridge-core/releases/download/v1.0.0/astro_bridge_core-1.0.0-py3-none-any.whl",
-  "source_asset": "astro_bridge_core-1.0.0.tar.gz",
-  "source_sha256": "b3a90cba825617a7629182be61c129d7a69556e8294ec27771372d9d56919546",
-  "source_url": "https://github.com/Sqound/astro-bridge-core/releases/download/v1.0.0/astro_bridge_core-1.0.0.tar.gz"
+  "version": "1.0.1",
+  "asset": "astro_bridge_core-1.0.1-py3-none-any.whl",
+  "sha256": "8329d0b56b422b1b50a498fd8b571afe08a13b39f72b992ff0e25f5a8fe07b66",
+  "url": "https://github.com/Sqound/astro-bridge-core/releases/download/v1.0.1/astro_bridge_core-1.0.1-py3-none-any.whl",
+  "source_asset": "astro_bridge_core-1.0.1.tar.gz",
+  "source_sha256": "a14bd93fead83a359a444df2c221560cd48cb12b18dca243e63cf381698a82ca",
+  "source_url": "https://github.com/Sqound/astro-bridge-core/releases/download/v1.0.1/astro_bridge_core-1.0.1.tar.gz"
 }

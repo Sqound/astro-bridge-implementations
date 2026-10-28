@@ -52,7 +52,7 @@ def main():
     (config/'tls-helper-version').write_text('2\n')
     if args.mode=='native':
         import venv
-        prefix=Path('/opt/astro-bridge-1.0.0')
+        prefix=Path('/opt/astro-bridge-1.0.1')
         if prefix.exists():p.error('Installation prefix already exists; stage an upgrade separately')
         subprocess.run([sys.executable,str(ROOT/'linux/build-conntrack.py'),'--prefix',str(prefix)],check=True)
         venv.EnvBuilder(with_pip=True,system_site_packages=False).create(prefix)
@@ -63,7 +63,7 @@ def main():
         import re
         if any(not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9.-]{0,252}',host) for host in args.allow_host):p.error('Invalid allowed hostname')
         hosts=''.join(' --allow-host '+host for host in ['localhost','127.0.0.1',*args.allow_host])
-        unit='[Unit]\nDescription=Astro Bridge native\nAfter=NetworkManager.service avahi-daemon.service\nWants=NetworkManager.service avahi-daemon.service\n[Service]\nEnvironment=ASTRO_BRIDGE_PLATFORM=native\nEnvironment=ASTRO_BRIDGE_CONNTRACK=/opt/astro-bridge-1.0.0/sbin/conntrack\nUMask=0077\nExecStart='+str(prefix/'bin/python')+' -m wifi_bridge'+hosts+'\nExecStopPost=-/bin/systemctl stop wifi-bridge-ap wifi-bridge-dhcp\nRestart=on-failure\nTimeoutStopSec=60\n[Install]\nWantedBy=multi-user.target\n'
+        unit='[Unit]\nDescription=Astro Bridge native\nAfter=NetworkManager.service avahi-daemon.service\nWants=NetworkManager.service avahi-daemon.service\n[Service]\nEnvironment=ASTRO_BRIDGE_PLATFORM=native\nEnvironment=ASTRO_BRIDGE_CONNTRACK=/opt/astro-bridge-1.0.1/sbin/conntrack\nUMask=0077\nExecStart='+str(prefix/'bin/python')+' -m wifi_bridge'+hosts+'\nExecStopPost=-/bin/systemctl stop wifi-bridge-ap wifi-bridge-dhcp\nRestart=on-failure\nTimeoutStopSec=60\n[Install]\nWantedBy=multi-user.target\n'
         Path('/etc/systemd/system/wifi-bridge.service').write_text(unit)
     subprocess.run(['systemctl','daemon-reload'],check=True)
     subprocess.run(['systemctl','enable','--now','NetworkManager','avahi-daemon'],check=True)

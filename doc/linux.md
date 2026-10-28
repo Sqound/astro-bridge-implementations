@@ -9,10 +9,10 @@ Use a dedicated recent Debian/Ubuntu systemd host, Python 3.11+, NetworkManager 
 ```sh
 python3 tools/core-artifact.py fetch
 sudo python3 linux/host-install.py --mode native \
-  --wheel build/core/astro_bridge_core-1.0.0-py3-none-any.whl
+  --wheel build/core/astro_bridge_core-1.0.1-py3-none-any.whl
 # After reviewing the plan:
 sudo python3 linux/host-install.py --mode native --apply \
-  --wheel build/core/astro_bridge_core-1.0.0-py3-none-any.whl
+  --wheel build/core/astro_bridge_core-1.0.1-py3-none-any.whl
 ```
 
 ![Private Wi-Fi and hotspot configuration](images/networks.png)
@@ -21,7 +21,7 @@ sudo python3 linux/host-install.py --mode native --apply \
 
 | Area | Result |
 | --- | --- |
-| Application | Isolated `/opt/astro-bridge-1.0.0` virtual environment |
+| Application | Isolated `/opt/astro-bridge-1.0.1` virtual environment |
 | Networking | Required host packages, app-owned AP/DHCP units, IPv4 forwarding |
 | Initial access | Private `/etc/wifi-bridge/bootstrap.json` with a random code |
 | Persistent state | `/var/lib/wifi-bridge` |

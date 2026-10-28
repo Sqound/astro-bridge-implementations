@@ -10,18 +10,22 @@ Use an original Pi Zero W with a suitable SD card, power supply, hub and Linux-s
 
 The implementation uses diskless Alpine, OpenRC and an **ASTRO_DATA** persistent partition. The core is staged from the exact locked wheel; drivers, services and recovery helpers belong to the image.
 
-## Build a local SD candidate
+## Download and flash
+
+Use the [native flasher](flasher.md), or download the release `.img.xz` and `ALPINE-STANDARD-SHA256SUMS` for Raspberry Pi Imager. Exact OS source archives and a package/recipe manifest accompany the image.
+
+## Build a local SD image
 
 ```sh
 python3 tools/core-artifact.py fetch
 python3 tools/build-raspberry.py \
-  --wheel build/core/astro_bridge_core-1.0.0-py3-none-any.whl \
+  --wheel build/core/astro_bridge_core-1.0.1-py3-none-any.whl \
   --stage build/pi-release --build
 ```
 
 Use a new stage directory. The builder needs Docker, Internet and at least 8 GiB free. It uses a pinned base/aports commit, records package closure and checks the compressed image, boot files, application identity and partition geometry.
 
-Output is under `build/pi-release/dist/standard-1.0.0/`. The local image remains a candidate until real boot/radio tests and binary redistribution requirements are completed.
+Output is under `build/pi-release/dist/standard-1.0.1/`. The builder checks geometry, filesystems, package signatures, firmware/modules and exact application identity. Fresh physical boot/radio acceptance is reported separately.
 
 ## Flash and first access
 

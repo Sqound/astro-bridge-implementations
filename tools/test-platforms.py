@@ -16,6 +16,8 @@ def main():
     with tempfile.TemporaryDirectory(prefix='astro-platform-tests-') as folder:
         stage=Path(folder)/'project';core.stage(args.wheel,stage)
         shutil.copytree(ROOT/'linux',stage/'linux')
+        for name in ('install-docker.py','install-docker.sh','build-flasher.py','collect-image-sources.py'):
+            shutil.copyfile(ROOT/'tools'/name,stage/'tools'/name)
         for test in (ROOT/'tests').glob('test_*.py'):shutil.copyfile(test,stage/'tests'/test.name)
         subprocess.run([sys.executable,'-m','unittest','discover','-s','tests','-v'],cwd=stage,check=True)
 

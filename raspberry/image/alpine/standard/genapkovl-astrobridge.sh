@@ -13,6 +13,7 @@ tmp="$(mktemp -d)"
 cleanup() { rm -rf "$tmp"; }
 trap cleanup EXIT
 
+
 mkdir -p "$tmp/opt/wifi-bridge/wifi_bridge/static" \
   "$tmp/etc/wifi-bridge" "$tmp/etc/NetworkManager/conf.d" \
   "$tmp/etc/NetworkManager/system-connections" "$tmp/etc/avahi/services" \
@@ -26,6 +27,15 @@ chmod 0700 "$tmp/etc/wifi-bridge" \
 
 cp "$PROJECT"/wifi_bridge/*.py "$tmp/opt/wifi-bridge/wifi_bridge/"
 cp "$PROJECT"/wifi_bridge/static/* "$tmp/opt/wifi-bridge/wifi_bridge/static/"
+mkdir -p "$tmp/usr/share/doc/astro-bridge"
+install -m 644 "$PROJECT/LICENSE" "$tmp/usr/share/doc/astro-bridge/LICENSE"
+cat > "$tmp/usr/share/doc/astro-bridge/SOURCES.txt" <<'SOURCES'
+Astro Bridge original source is MIT licensed. OS packages and firmware retain
+their upstream terms. Common license texts are installed by Alpine's spdx-licenses-text
+package. The matching release provides exact package build recipes and upstream
+source archives alongside this image:
+https://github.com/Sqound/astro-bridge-implementations/releases
+SOURCES
 python3 "$PROJECT/image/alpine/standard/candidate.py" stamp "$tmp/opt/wifi-bridge/wifi_bridge" >/dev/null
 install -m 755 "$PROJECT"/scripts/ota.py "$tmp/usr/libexec/astro-bridge-ota"
 install -m 755 "$PROJECT"/image/alpine/openrc/wifi-bridge* "$tmp/etc/init.d/"
