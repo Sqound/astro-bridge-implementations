@@ -1,7 +1,7 @@
 {
   "format": 1,
   "version": "1.0.1",
-  "source_sha256": "14966321eb9921986b4293c831935109d86f26aa3da2e35269c4e7ca8caa6a74",
+  "source_sha256": "1eef261247617bf53d1a1d06e8d989696f349c43b393f6ebcd4757fb0592d307",
   "files": [
     ".gitattributes",
     ".github/workflows/checks.yml",

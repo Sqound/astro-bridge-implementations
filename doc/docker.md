@@ -17,7 +17,10 @@ If needed, the wrapper installs Python/curl. The installer uses Docker's signed 
 
 For the portable demo, use `--mode demo`. macOS/Windows use Docker Desktop; the Python installer can install it through an available Homebrew/winget installation. Complete Docker Desktop's first-run setup or required reboot, then rerun the installer. Native Windows Wi-Fi management is unsupported.
 
+Download the Python installer from the same release first (Python 3.11 or later is required on macOS/Windows):
+
 ```sh
+curl -fLO https://github.com/Sqound/astro-bridge-implementations/releases/download/v1.0.1/install-docker.py
 python3 install-docker.py --mode demo
 python3 install-docker.py --mode demo --apply
 ```
