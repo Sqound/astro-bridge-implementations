@@ -12,7 +12,7 @@ import sys
 import tarfile
 import urllib.request
 
-ROOT=Path(__file__).resolve().parents[1]
+ROOT=Path(__file__).resolve().parent.parent
 
 
 def sha(path):
