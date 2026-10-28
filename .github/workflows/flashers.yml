@@ -1,6 +1,12 @@
 name: Build release flashers
 on:
   workflow_dispatch:
+    inputs:
+      platform:
+        description: Native platforms to build
+        type: choice
+        default: all
+        options: [all, windows, macos, linux]
 permissions:
   contents: read
 jobs:
@@ -10,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runner: [ubuntu-22.04, ubuntu-24.04-arm, windows-2025, macos-15, macos-15-intel]
+        runner: ${{ fromJSON(inputs.platform == 'windows' && '["windows-2025"]' || inputs.platform == 'macos' && '["macos-15","macos-15-intel"]' || inputs.platform == 'linux' && '["ubuntu-22.04","ubuntu-24.04-arm"]' || '["ubuntu-22.04","ubuntu-24.04-arm","windows-2025","macos-15","macos-15-intel"]') }}
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1

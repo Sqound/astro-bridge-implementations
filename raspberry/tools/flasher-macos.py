@@ -9,6 +9,7 @@ import re
 import runpy
 import ssl
 import sysconfig
+import sys
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -40,8 +41,10 @@ def runtime_inputs():
         if not match:
             raise ValueError('Exact Tcl/Tk release cannot be identified.')
         versions[name] = match[1]
-    license_file = Path(sysconfig.get_path('stdlib')) / 'LICENSE.txt'
-    if not license_file.is_file() or license_file.stat().st_size > MAX_FILE:
+    candidates = [Path(sysconfig.get_path('stdlib')) / 'LICENSE.txt',
+                  Path(sys.base_prefix) / 'LICENSE.txt', Path(sys.executable).parent / 'LICENSE.txt']
+    license_file = next((p for p in candidates if p.is_file() and p.stat().st_size <= MAX_FILE), None)
+    if license_file is None:
         raise ValueError('Actual Python runtime license missing.')
     return versions, license_file.read_bytes()
 
