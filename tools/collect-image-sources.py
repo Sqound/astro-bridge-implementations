@@ -41,7 +41,7 @@ def inside(image, output):
         git('checkout','-q','--detach','FETCH_HEAD')
         candidates=[repository/repo/origin for repo in ('main','community','testing') if (repository/repo/origin/'APKBUILD').is_file()]
         if len(candidates)!=1:raise ValueError('Ambiguous/missing recipe: '+origin)
-        recipe=candidates[0];env=dict(os.environ,CHOST='armv6-alpine-linux-musleabihf',CARCH='armhf')
+        recipe=candidates[0];env=dict(os.environ,CHOST='armv6-alpine-linux-musleabihf',CARCH='armhf',DISTFILES_MIRROR='https://distfiles.alpinelinux.org/distfiles/v3.24')
         command=['abuild','-F','-f','-d','-P',str(packages),'-s',str(recipe)]
         listing=subprocess.check_output(command+['listpkg'],cwd=recipe,env=env,text=True)
         for row in group['packages']:
