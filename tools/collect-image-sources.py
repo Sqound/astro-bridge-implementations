@@ -23,6 +23,9 @@ def inside(image, output):
     subprocess.run(['apk','add','--no-cache','alpine-sdk','git','python3'],check=True)
     repository=Path('/work/aports');repository.mkdir(parents=True)
     subprocess.run(['git','init','-q',str(repository)],check=True)
+    # Repeated shallow fetches must not race background repository maintenance.
+    for key,value in (('gc.auto','0'),('maintenance.auto','false'),('fetch.writeCommitGraph','false')):
+        subprocess.run(['git','-C',str(repository),'config',key,value],check=True)
     subprocess.run(['git','-C',str(repository),'remote','add','origin','https://github.com/alpinelinux/aports.git'],check=True)
     def git(*args,**kwargs):return subprocess.run(['git','-C',str(repository),*args],check=True,**kwargs)
     rows=json.loads((image/'source-packages.json').read_text())+json.loads((image/'source-kernel-packages.json').read_text())
