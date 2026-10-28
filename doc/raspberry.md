@@ -2,6 +2,10 @@
 
 [Documentation](README.md) / Raspberry
 
+The Raspberry download is a **complete Alpine Linux operating-system image** with Astro Bridge, drivers and system services already installed. Astro Bridge starts automatically as a service at boot; no separate Core installation is needed.
+
+Flash the `.img.xz` to an SD card for the original Raspberry Pi Zero W. For an existing computer, compare [Core and Docker installation](deployment-options.md) instead.
+
 ## Hardware and network roles
 
 Use an original Pi Zero W with a suitable SD card, power supply, hub and Linux-supported Wi-Fi adapters. The built-in radio can serve one role; add adapters for simultaneous private Wi-Fi, hotspot and telescope uplinks.

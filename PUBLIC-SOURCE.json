@@ -1,7 +1,7 @@
 {
   "format": 1,
   "version": "1.0.1",
-  "source_sha256": "1eef261247617bf53d1a1d06e8d989696f349c43b393f6ebcd4757fb0592d307",
+  "source_sha256": "eaeafac328fe4338322a1f6e7a8034efb2c6d361b0e2838dafef4593c63343ad",
   "files": [
     ".gitattributes",
     ".github/workflows/checks.yml",
@@ -15,6 +15,7 @@
     "VERSION",
     "core.lock.json",
     "doc/README.md",
+    "doc/deployment-options.md",
     "doc/docker.md",
     "doc/flasher.md",
     "doc/images/dashboard-dark.png",

@@ -2,6 +2,8 @@
 
 [Documentation](README.md) / Native flashers
 
+The flasher writes the complete Alpine Linux + Astro Bridge system to an SD card. Astro Bridge is preconfigured to start automatically as a service at boot.
+
 Download the matching flasher from [release 1.0.1](https://github.com/Sqound/astro-bridge-implementations/releases/tag/v1.0.1). Each archive contains its runtime; Python is not required.
 
 | Computer | Archive suffix |

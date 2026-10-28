@@ -13,12 +13,15 @@ This repository provides deployment recipes for [Astro Bridge Core](https://gith
 
 ## Choose your deployment
 
-| Deployment | Purpose | Requirements | Validation scope |
-| --- | --- | --- | --- |
-| Raspberry Pi Zero W | Dedicated diskless Alpine appliance | Supported Pi, SD card and compatible Wi-Fi adapters | App-only OTA checked on an existing installation; fresh SD boot pending |
-| Docker demo | Try the UI/API without changing networking | Docker Engine or Docker Desktop | Built and tested with authentication/persistence |
-| Docker Linux | Real telescope networking on a dedicated Linux host | Rootful Linux Engine, host services and physical Wi-Fi | Installed-core packet tests passed; full host-radio contract pending |
-| Native Linux | Isolated app installation plus host integration | Dedicated recent Debian/Ubuntu systemd host | Installer/helper contracts tested; physical host-radio acceptance pending |
+All three options run the same application:
+
+| Option | Included | Installation |
+| --- | --- | --- |
+| **Complete Raspberry Pi image** | Alpine Linux, Astro Bridge, drivers and system services | Flash an SD card for the original Raspberry Pi Zero W; Astro Bridge starts automatically at boot |
+| **Core only** | The application, web interface, API and hardware plugins | Install on an existing system; real Wi-Fi control also needs Linux host integration |
+| **Docker** | Core and its container dependencies | Run on an existing Docker host: demo on macOS/Windows, or real networking on a compatible Linux host |
+
+The Raspberry download is a complete operating-system image. Core and Docker install the application on a computer that already has an operating system. See [installation options](doc/deployment-options.md) for the differences, or the [validation matrix](doc/reference/validation.md) for hardware evidence.
 
 One adapter is needed per simultaneous Wi-Fi role. A private Wi-Fi uplink, hotspot and one telescope uplink normally use three adapters. Read [platform requirements](doc/platform-contract.md) before assigning existing host interfaces.
 
@@ -28,7 +31,7 @@ Use the [1.0.1 release](https://github.com/Sqound/astro-bridge-implementations/r
 
 | Goal | Download |
 | --- | --- |
-| Prepare a Pi Zero W SD card | [Native flasher for Windows, macOS or Linux](doc/flasher.md), or the `.img.xz` image for Raspberry Pi Imager |
+| Complete Raspberry Pi Zero W system: Alpine Linux + Astro Bridge | [Native flasher for Windows, macOS or Linux](doc/flasher.md), or the `.img.xz` image for Raspberry Pi Imager |
 | Deploy Docker on a Linux PC | `install-docker.sh`; plans first, installs dependencies and starts the chosen deployment with `--apply` |
 | Run the Docker demo on macOS/Windows | `install-docker.py`; Docker Desktop setup may require a first-run action or OS reboot |
 | Update an existing compatible appliance | Alpine armhf application-only OTA and its manifest |
@@ -49,7 +52,7 @@ Open **http://127.0.0.1:8787**. Password: **`demo-telescope-2026`**.
 
 The demo runs without host network capabilities and preserves settings in a named volume. `docker compose -f docker/compose.demo.yaml down` stops it without deleting that volume.
 
-Docker Desktop on Windows/macOS supports the demo. Its networking feature does not provide the physical Wi-Fi control required by real mode. See [Docker deployment](doc/docker.md).
+Standard Docker Desktop setups on Windows/macOS support the demo. Physical Wi-Fi control additionally requires adapters and host services inside the Linux VM; USB forwarding is not configured or validated by this installer. See [Docker deployment](doc/docker.md).
 
 ## Deploy on a dedicated host
 

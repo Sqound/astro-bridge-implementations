@@ -2,6 +2,10 @@
 
 [Documentation](README.md) / Docker
 
+Docker runs the Astro Bridge application and its container dependencies on an existing computer. It does not install a complete operating system like the Raspberry SD image. See [installation options](deployment-options.md) for the three choices.
+
+**Demo mode** works on Docker Engine or Docker Desktop with simulated equipment. **Real networking** requires a compatible Linux host, physical Wi-Fi adapters and the host services described below. On macOS/Windows, connecting a USB dongle alone does not expose a radio to the container; see [USB Wi-Fi through a VM](deployment-options.md#usb-wi-fi-on-macos-and-windows).
+
 ## Use the installer
 
 The installer prints a plan by default. On a dedicated Debian/Ubuntu Linux host:

@@ -1,12 +1,14 @@
 # Deployment documentation
 
+**Start with [installation options](deployment-options.md)** to choose between the complete Raspberry Pi system, the Core application and Docker.
+
 ![Network roles in the demo interface](images/networks.png)
 
 | Guide | Read when |
 | --- | --- |
 | [Docker](docker.md) | Trying the app or running the Linux container integration |
 | [Native flashers](flasher.md) | Preparing SD cards on Windows, macOS or Linux |
-| [Raspberry Pi Zero W](raspberry.md) | Building a dedicated diskless SD appliance |
+| [Raspberry Pi Zero W](raspberry.md) | Flashing a complete Alpine Linux + Astro Bridge system, or building its image |
 | [Native Linux](linux.md) | Installing without Docker |
 | [Updates and recovery](updates.md) | Replacing a verified artifact or using appliance OTA |
 | [Platform contract](platform-contract.md) | Contributing another implementation |
