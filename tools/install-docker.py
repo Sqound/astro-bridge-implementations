@@ -122,8 +122,11 @@ def main():
     if args.mode=='linux':run([sys.executable,prefix/'linux/host-install.py','--mode','docker','--apply','--wheel',wheel])
     run([sys.executable,prefix/'docker/build.py','--wheel',wheel,'--target',args.mode])
     compose=prefix/'docker'/('compose.demo.yaml' if args.mode=='demo' else 'compose.linux.yaml')
-    env=dict(os.environ,ASTRO_BRIDGE_PORT=str(args.port))
-    run(['docker','compose','-p',args.project,'-f',compose,'up','-d'],env=env)
+    envfile=compose.parent/'.env'
+    envfile.write_text(f'ASTRO_BRIDGE_PROJECT={args.project}\nASTRO_BRIDGE_PORT={args.port}\n');envfile.chmod(0o600)
+    env=dict(os.environ,ASTRO_BRIDGE_PORT=str(args.port),ASTRO_BRIDGE_PROJECT=args.project)
+    run(['docker','compose','--env-file',envfile,'-p',args.project,'-f',compose,'up','-d'],env=env)
+    print('Compose settings saved in '+str(envfile))
     if args.mode=='demo':print(f'Open http://127.0.0.1:{args.port}; demo password: demo-telescope-2026')
     else:print('Open the host IP or hotspot. Initial private access code: sudo cat /etc/wifi-bridge/bootstrap.json')
 

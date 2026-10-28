@@ -1,3 +1,4 @@
+name: ${ASTRO_BRIDGE_PROJECT:-astro-bridge}
 services:
   astro-bridge:
     image: astro-bridge:1.0.1-demo

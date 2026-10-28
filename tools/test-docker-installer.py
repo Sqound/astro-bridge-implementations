@@ -42,6 +42,7 @@ def main():
             session=request('/api/login',{'password':'demo-telescope-2026'})
             status=request('/api/status');assert status['demo'] and request('/api/updates')['current_version']==version
             assert session['csrf'] and (prefix/'core.lock.json').is_file()
+            saved=(prefix/'docker/.env').read_text();assert f'ASTRO_BRIDGE_PORT={port}' in saved and f'ASTRO_BRIDGE_PROJECT={project}' in saved
             print('PASS Docker installer: verified source/core, image build, Compose deployment and real browser-origin authentication on the configured port')
         finally:
             if compose.exists():subprocess.run(['docker','compose','-p',project,'-f',str(compose),'down','--volumes'],env=env,check=True)
