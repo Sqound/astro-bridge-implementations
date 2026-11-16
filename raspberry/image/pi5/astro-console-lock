@@ -1,0 +1,4 @@
+#!/sbin/openrc-run
+name="Lock the console root account until its password is applied"
+depend() { before localmount; }
+start() { printf 'root:!\n' | chpasswd -e; }

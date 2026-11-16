@@ -30,3 +30,14 @@ An implementation consumes Core as a versioned artifact. It supplies host capabi
 The reference Linux backend is shared Core code. Another OS needs a compatible backend/observation contract; a Docker wrapper alone does not provide Windows or macOS radio management.
 
 Choose `ASTRO_BRIDGE_PLATFORM=native`, `docker` or `raspberry` as appropriate. `ASTRO_BRIDGE_CONNTRACK` can select a deployment-supplied absolute executable path; its version is still checked. Keep credentials and raw captures out of Git.
+
+## Optional camera service
+
+The `indi` entry supplies `listen(access)` (an IPv4 TCP listener bound to the
+confirmed management interface and address) and `launch(driver, device, child)`
+(a process handle whose completion proves the confined process tree exited).
+The connected control socket receives only listener descriptors and peer
+subnet policy. Before launch the worker returns a pollable namespace lifetime
+descriptor and waits for host acknowledgement. Owner opt-in, per-camera protocol ownership, retries, health and
+availability remain in Core. An absent entry keeps INDI unavailable.
+[Linux requirements and package installation](indi.md)

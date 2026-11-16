@@ -1,0 +1,13 @@
+#!/sbin/openrc-run
+name="Astro Bridge"
+command="/usr/bin/python3"
+command_args="-m wifi_bridge --bootstrap /var/lib/wifi-bridge/bootstrap.json"
+directory="/var/lib/wifi-bridge/app"
+supervisor="supervise-daemon"
+respawn_delay=8
+respawn_max=0
+output_log="/var/log/wifi-bridge.log"
+error_log="/var/log/wifi-bridge.log"
+depend() { need astro-firstboot astro-target-udev dbus networkmanager; }
+start_pre() { /usr/bin/python3 /etc/wifi-bridge/hotspot-release.py || return 1; /usr/bin/python3 /etc/wifi-bridge/guard.py || return 1; }
+stop_post() { rc-service wifi-bridge-ap stop || return 1; rc-service wifi-bridge-dhcp stop || return 1; /usr/bin/python3 /etc/wifi-bridge/hotspot-release.py; }

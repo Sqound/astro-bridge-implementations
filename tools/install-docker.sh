@@ -18,7 +18,7 @@ if ! command -v python3 >/dev/null 2>&1 || ! command -v curl >/dev/null 2>&1; th
 fi
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT HUP INT TERM
-curl -fL https://github.com/Sqound/astro-bridge-implementations/releases/download/v1.0.1/install-docker.py -o "$work/install-docker.py"
+curl -fL https://github.com/Sqound/astro-bridge-implementations/releases/download/v1.1.0/install-docker.py -o "$work/install-docker.py"
 python3 - "$work/install-docker.py" '__DOCKER_INSTALLER_SHA256__' <<'PY'
 import hashlib,pathlib,sys
 assert hashlib.sha256(pathlib.Path(sys.argv[1]).read_bytes()).hexdigest()==sys.argv[2], 'Docker installer checksum mismatch'

@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 490 400" fill="none">
+  <defs>
+    <radialGradient id="halo">
+      <stop stop-color="#b68a4c" stop-opacity=".22"/>
+      <stop offset="1" stop-color="#b68a4c" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="edge" x1="150" y1="120" x2="323" y2="277" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#eac78f"/>
+      <stop offset="1" stop-color="#735833"/>
+    </linearGradient>
+    <pattern id="grid" width="25" height="25" patternUnits="userSpaceOnUse">
+      <path d="M25 0H0v25" stroke="#39433b" stroke-opacity=".48"/>
+    </pattern>
+    <radialGradient id="fade">
+      <stop stop-color="white"/>
+      <stop offset="1" stop-color="white" stop-opacity="0"/>
+    </radialGradient>
+    <mask id="chart-mask"><ellipse cx="257" cy="201" rx="230" ry="194" fill="url(#fade)"/></mask>
+    <g id="star" fill="currentColor">
+      <path d="M0-12C.4-3 3-.4 12 0 3 .4.4 3 0 12-.4 3-3 .4-12 0-3-.4-.4-3 0-12Z"/>
+    </g>
+  </defs>
+  <ellipse cx="253" cy="197" rx="219" ry="172" fill="url(#halo)"/>
+  <path fill="url(#grid)" d="M0 0h490v400H0z" mask="url(#chart-mask)"/>
+  <path d="M85 200h338M252 47v306" stroke="#7a715d" stroke-opacity=".45" stroke-dasharray="2 6"/>
+  <circle cx="252" cy="200" r="148" stroke="#89734f" stroke-opacity=".34" stroke-dasharray="2 6"/>
+  <circle cx="252" cy="200" r="107" stroke="#89734f" stroke-opacity=".45"/>
+  <circle cx="252" cy="200" r="78" stroke="#89734f" stroke-opacity=".55"/>
+  <ellipse cx="252" cy="200" rx="182" ry="59" transform="rotate(-26 252 200)" stroke="url(#edge)" stroke-opacity=".66"/>
+  <ellipse cx="252" cy="200" rx="168" ry="44" transform="rotate(23 252 200)" stroke="#89734f" stroke-opacity=".35"/>
+  <path d="M252 130l61 35v70l-61 35-61-35v-70z" fill="#1b221d" stroke="url(#edge)" stroke-width="1.5"/>
+  <path d="M252 140l52 30v60l-52 30-52-30v-60z" fill="#252920" stroke="#6b5b3d"/>
+  <g transform="translate(252 200) rotate(22)" stroke="#e2b975" stroke-width="3" stroke-linecap="round">
+    <path d="M12-26a29 29 0 0 1 14 14m0 24a29 29 0 0 1-14 14m-24 0a29 29 0 0 1-14-14m0-24a29 29 0 0 1 14-14"/>
+    <use href="#star" transform="scale(3.45)" color="#e2b975" stroke="none"/>
+  </g>
+  <g fill="#e2b975">
+    <circle cx="381" cy="121" r="4"/><circle cx="112" cy="267" r="4"/><circle cx="252" cy="93" r="3"/><circle cx="252" cy="307" r="2.5"/>
+  </g>
+  <g stroke="#ad8b53" stroke-opacity=".5">
+    <circle cx="381" cy="121" r="10"/><circle cx="112" cy="267" r="10"/>
+    <path d="M385 112l18-23h40m-334 187-18 23H51"/>
+  </g>
+  <g color="#ba9b67">
+    <use href="#star" x="144" y="79" transform="translate(82 45) scale(.44)"/>
+    <use href="#star" x="354" y="291" transform="translate(195 160) scale(.45)"/>
+    <use href="#star" x="406" y="247" transform="translate(305 185) scale(.25)"/>
+    <use href="#star" x="91" y="151" transform="translate(65 108) scale(.29)"/>
+  </g>
+  <g fill="#a89472" opacity=".65">
+    <circle cx="179" cy="62" r="1.8"/><circle cx="321" cy="70" r="1.7"/><circle cx="353" cy="101" r="1.8"/>
+    <circle cx="411" cy="159" r="1.5"/><circle cx="375" cy="208" r="1.6"/><circle cx="431" cy="222" r="1.2"/>
+    <circle cx="332" cy="328" r="1.5"/><circle cx="279" cy="353" r="1.7"/><circle cx="172" cy="331" r="1.8"/>
+    <circle cx="144" cy="308" r="1.1"/><circle cx="72" cy="218" r="1.7"/><circle cx="114" cy="116" r="1.5"/>
+  </g>
+</svg>

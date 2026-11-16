@@ -1,0 +1,12 @@
+[connection]
+id=wifi-bridge-wired
+type=ethernet
+interface-name=eth0
+autoconnect=true
+multi-connect=0
+[ethernet]
+[ipv4]
+method=auto
+route-metric=100
+[ipv6]
+method=disabled

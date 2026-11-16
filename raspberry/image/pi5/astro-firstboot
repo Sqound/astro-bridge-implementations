@@ -1,0 +1,4 @@
+#!/sbin/openrc-run
+name="Astro Bridge first boot identity"
+depend() { need astro-data astro-runtime-packages; before astro-target-udev networkmanager wifi-bridge; }
+start() { /usr/bin/python3 /etc/wifi-bridge/firstboot.py; }

@@ -1,0 +1,29 @@
+#!/sbin/openrc-run
+name="Astro Bridge optional INDI gPhoto packages"
+depend() { need astro-runtime-packages; after astro-display-packages astro-camera-packages; before wifi-bridge; }
+start() {
+    local cache=/media/mmcblk0p2/cache/gphoto file hash rest status=0
+    set --
+    while read -r hash file rest; do
+        [ -z "$rest" ] || { status=1; break; }
+        case "$hash" in *[!0-9a-f]*|'') status=1; break;; esac
+        [ "${#hash}" -eq 64 ] || { status=1; break; }
+        case "$file" in ''|*[!A-Za-z0-9_.+-]*|.*) status=1; break;; esac
+        case "$file" in *.apk) :;; *) status=1; break;; esac
+        [ -f "$cache/$file" ] && [ ! -L "$cache/$file" ] && [ "$(sha256sum "$cache/$file" | cut -d ' ' -f 1)" = "$hash" ] || { status=1; break; }
+        set -- "$@" "$cache/$file"
+    done < /etc/wifi-bridge/gphoto-packages.sha256
+    if [ "$status" -eq 0 ] && [ "$#" -eq 24 ]; then
+        for prior in .astro-bridge-runtime .astro-display .astro-camera; do
+            if apk info -e "$prior" >/dev/null 2>&1; then printf "%s\n" "$prior" >> /etc/apk/world || status=1; fi
+        done
+        [ "$status" -eq 0 ] && apk add --network=no --no-cache --force-non-repository --virtual .astro-gphoto "$@" || status=1
+        cp /etc/wifi-bridge/base-world /etc/apk/world || status=1
+    else
+        status=1
+    fi
+    if [ "$status" -ne 0 ]; then
+        ewarn "Optional INDI gPhoto packages unavailable; bridge networking continues"
+    fi
+    return 0
+}

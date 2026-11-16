@@ -15,7 +15,7 @@ trap cleanup EXIT
 
 
 mkdir -p "$tmp/opt/wifi-bridge/wifi_bridge/static" \
-  "$tmp/etc/wifi-bridge" "$tmp/etc/NetworkManager/conf.d" \
+  "$tmp/etc/udev/rules.d" "$tmp/etc/wifi-bridge" "$tmp/etc/NetworkManager/conf.d" \
   "$tmp/etc/NetworkManager/system-connections" "$tmp/etc/avahi/services" \
   "$tmp/usr/libexec" "$tmp/usr/sbin" "$tmp/etc/conf.d" "$tmp/etc/periodic/hourly" "$tmp/etc/periodic/daily" "$tmp/etc/ssh/sshd_config.d" "$tmp/etc/sudoers.d" "$tmp/etc/init.d" "$tmp/etc/sysctl.d" "$tmp/etc/apk" "$tmp/etc/runlevels/sysinit" \
   "$tmp/etc/runlevels/boot" "$tmp/etc/runlevels/default" \
@@ -25,8 +25,7 @@ mkdir -p "$tmp/opt/wifi-bridge/wifi_bridge/static" \
 chmod 0700 "$tmp/etc/wifi-bridge" \
   "$tmp/etc/NetworkManager/system-connections" "$tmp/var/lib/wifi-bridge"
 
-cp "$PROJECT"/wifi_bridge/*.py "$tmp/opt/wifi-bridge/wifi_bridge/"
-cp "$PROJECT"/wifi_bridge/static/* "$tmp/opt/wifi-bridge/wifi_bridge/static/"
+python3 "$PROJECT/scripts/copy-app.py" "$PROJECT/wifi_bridge" "$tmp/opt/wifi-bridge/wifi_bridge"
 mkdir -p "$tmp/usr/share/doc/astro-bridge"
 install -m 644 "$PROJECT/LICENSE" "$tmp/usr/share/doc/astro-bridge/LICENSE"
 cat > "$tmp/usr/share/doc/astro-bridge/SOURCES.txt" <<'SOURCES'
@@ -47,13 +46,16 @@ install -m 755 "$PROJECT"/image/alpine/standard/clock-checkpoint "$tmp/etc/perio
 install -m 644 "$PROJECT"/systemd/wifi-bridge-http.service "$tmp/etc/avahi/services/"
 
 install -m 755 "$PROJECT"/image/alpine/standard/update-check "$tmp/etc/periodic/daily/astro-bridge-updates"
-printf '%s\n' 2 > "$tmp/etc/wifi-bridge/updater-version"
+printf '%s\n' 3 > "$tmp/etc/wifi-bridge/updater-version"
 printf '%s\n' 2 > "$tmp/etc/wifi-bridge/tls-helper-version"
 printf '%s\n' diskless > "$tmp/etc/wifi-bridge/diskless"
 printf '%s\n' 'rc_need="astro-bridge-provision"' 'sshd_disable_keygen="yes"' > "$tmp/etc/conf.d/sshd"
 printf '%s\n' 'rc_need="modules"' > "$tmp/etc/conf.d/sysctl"
 printf '%s\n' 'PermitRootLogin no' 'PasswordAuthentication yes' > "$tmp/etc/ssh/sshd_config.d/astro-bridge.conf"
 ln -s /bin/busybox "$tmp/usr/sbin/rfkill"
+# The owner installer writes this narrow rule on ASTRO_DATA only after acceptance.
+ln -s /var/lib/wifi-bridge/camera-drivers/zwo-1.41/70-astro-bridge-asi.rules \
+  "$tmp/etc/udev/rules.d/70-astro-bridge-asi.rules"
 printf '%s\n' openrc > "$tmp/etc/wifi-bridge/init-system"
 printf '%s\n' '{"password":"12345678"}' > "$tmp/etc/wifi-bridge/bootstrap.json"
 chmod 600 "$tmp/etc/wifi-bridge/bootstrap.json"
@@ -77,7 +79,7 @@ printf '%s\n' \
   'chrony' 'chrony-openrc' 'dbus' 'dbus-openrc' 'hostapd' 'dnsmasq' \
   'avahi' 'avahi-openrc' 'openssh' 'openssh-server-common-openrc' \
   'nftables' 'conntrack-tools' 'iw' 'iproute2' 'wireless-regdb' 'linux-firmware-brcm' 'linux-firmware-rtw88' 'e2fsprogs-extra' \
-  'eudev' 'eudev-openrc' 'usb-modeswitch' 'usb-modeswitch-udev' 'shadow' 'sudo' 'ca-certificates' 'openssl' 'py3-cryptography' 'py3-http-ece' \
+  'eudev' 'eudev-openrc' 'usb-modeswitch' 'usb-modeswitch-udev' 'gcompat' 'shadow' 'sudo' 'ca-certificates' 'openssl' 'py3-cryptography' 'py3-http-ece' \
   > "$tmp/etc/apk/world"
 
 # modloop exposes /lib/modules before the Wi-Fi driver and rfkill are used.

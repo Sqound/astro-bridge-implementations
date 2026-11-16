@@ -1,0 +1,12 @@
+#!/sbin/openrc-run
+name="Astro Bridge boot splash"
+depend() { after devfs; before astro-data; }
+start() {
+    # The worker's bounded device wait never delays the rest of boot.
+    [ ! -e /run/astro-display-owned ] || return 0
+    [ -x /usr/local/sbin/astro-graphic-splash ] && [ -x /usr/local/sbin/astro-graphic-splash-supervisor ] && [ -r /usr/share/astro-bridge/boot-splash.ppm ] || return 0
+    mkdir /run/astro-display-claim 2>/dev/null || return 0
+    /etc/wifi-bridge/astro-display-splash-worker </dev/null >/dev/null 2>&1 &
+    echo $! > /run/astro-graphic-splash.pid
+    return 0
+}

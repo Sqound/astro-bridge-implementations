@@ -1,0 +1,42 @@
+name: Raspberry Pi Zero W image
+description: Build and check the Zero W image, its OTA, Docker installers and OS sources from the Core wheel in CORE_WHEEL.
+inputs:
+  root:
+    default: .
+  retention-days:
+    default: '14'
+runs:
+  using: composite
+  steps:
+    - name: Resolve the tree (artifact paths may not contain ..)
+      id: where
+      shell: bash
+      env:
+        ROOT_INPUT: ${{ inputs.root }}
+      run: echo "root=$(python -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$ROOT_INPUT")" >> "$GITHUB_OUTPUT"
+    - name: Image checking tools
+      shell: bash
+      run: sudo apt-get update && sudo apt-get install -y --no-install-recommends mtools
+    - name: Build the image (privileged container, no host device)
+      shell: bash
+      working-directory: ${{ steps.where.outputs.root }}
+      run: |
+        set -euo pipefail
+        version=$(cat VERSION)
+        python tools/build-raspberry.py --wheel "$CORE_WHEEL" --stage build/pi-release --build
+        python tools/collect-image-sources.py --image-dir "build/pi-release/dist/standard-$version" --output build/os-sources
+        python tools/package-release.py --wheel "$CORE_WHEEL" --pi-candidate "build/pi-release/dist/standard-$version" \
+          --ota-stage build/pi-release --output dist-zero
+        # collect-image-sources.py publishes its release files under dist/pi-sources.
+        cp dist/pi-sources/OS-SOURCE-MANIFEST.json dist/pi-sources/OS-SOURCE-SHA256SUMS dist-zero/
+        while read -r _ name; do cp "dist/pi-sources/$name" dist-zero/; done < dist/pi-sources/OS-SOURCE-SHA256SUMS
+    - name: No SSH key, saved Wi-Fi secret or private key in the image
+      shell: bash
+      working-directory: ${{ steps.where.outputs.root }}
+      run: python tools/verify-image-content.py "dist-zero/astro-bridge-$(cat VERSION)-alpine-armhf-standard.img.xz"
+    - uses: actions/upload-artifact@v4
+      with:
+        name: image-pi-zero-w
+        path: ${{ steps.where.outputs.root }}/dist-zero/*
+        if-no-files-found: error
+        retention-days: ${{ inputs.retention-days }}

@@ -51,19 +51,31 @@ class PersistenceTests(unittest.TestCase):
                 stream.write('bridge:!:1:0:99999:7:::\n')
         elif args[0] == '/usr/sbin/chpasswd':
             account, value = kwargs['input'].rstrip('\n').split(':', 1)
-            self.assertEqual(account, 'bridge')
+            self.assertIn(account, ('bridge', 'root'))
+            if account == 'root':
+                self.assertEqual((args, value), (['/usr/sbin/chpasswd', '-e'], '!'))
             if '-e' not in args:
                 value = '$6$test$' + value.encode().hex()
             shadow = self.root / 'etc/shadow'
             lines = shadow.read_text().splitlines()
-            shadow.write_text('\n'.join('bridge:' + value + ':1:0:99999:7:::' if l.startswith('bridge:') else l for l in lines) + '\n')
+            shadow.write_text('\n'.join(account + ':' + value + ':1:0:99999:7:::' if l.startswith(account + ':') else l for l in lines) + '\n')
         else:
             # Real independent Ed25519 key generation and key validation.
             return subprocess.run(args, **kwargs)
         return subprocess.CompletedProcess(args, 0, '', '')
 
+    def changes(self):
+        # Locking root happens first on every boot, even when storage is unusable.
+        return [c for c in self.commands if c != (['/usr/sbin/chpasswd', '-e'], 'root:!\n')]
+
     def request(self, password='synthetic-new-password'):
         self.secret_file(self.state / 'linux-password.pending', password)
+
+    def test_root_is_locked_at_every_boot(self):
+        (self.root / 'etc/shadow').write_text('root::1:0:99999:7:::\n')
+        self.helper.boot()
+        self.assertIn('root:!:', (self.root / 'etc/shadow').read_text())
+        self.assertEqual(self.commands[0], (['/usr/sbin/chpasswd', '-e'], 'root:!\n'))
 
     def test_fresh_device_password_and_keys_survive_ram_root_reconstruction(self):
         self.helper.boot()
@@ -99,7 +111,7 @@ class PersistenceTests(unittest.TestCase):
         self.commands.clear(); self.helper.boot()
         self.assertEqual(self.helper.stored_hash(), original_hash)
         self.assertEqual(key.read_bytes(), original)
-        self.assertFalse(any(args[0] in ['/usr/sbin/adduser','/usr/sbin/chpasswd'] for args, _ in self.commands))
+        self.assertFalse(any(args[0] in ['/usr/sbin/adduser','/usr/sbin/chpasswd'] for args, _ in self.changes()))
 
     def test_distinct_fresh_roots_have_independent_keys(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -152,7 +164,7 @@ class PersistenceTests(unittest.TestCase):
                 self.mountinfo.write_text(content)
                 with self.assertRaises(RuntimeError): self.helper.boot()
                 self.assertFalse((self.state/'identity').exists())
-                self.assertFalse(self.commands)
+                self.assertFalse(self.changes())
         self.mountinfo.write_text('42 1 179:2 / /var/lib/wifi-bridge rw - ext4 /dev/mmcblk0p2 rw\n')
         (self.root/'dev/disk/by-label/ASTRO_DATA').unlink()
         with self.assertRaises(RuntimeError): self.helper.boot()
@@ -164,7 +176,7 @@ class PersistenceTests(unittest.TestCase):
             self.secret_file(record, value); self.commands.clear()
             with self.assertRaises((ValueError, TypeError)): self.helper.boot()
             self.assertEqual(self.helper.shadow_hash(), before)
-            self.assertFalse(self.commands)
+            self.assertFalse(self.changes())
         record.unlink(); record.symlink_to(self.root/'etc/shadow')
         with self.assertRaises(OSError): self.helper.boot()
         self.assertEqual(self.helper.shadow_hash(), before)

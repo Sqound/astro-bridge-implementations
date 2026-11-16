@@ -7,6 +7,10 @@ depend() { need localmount; before sshd chronyd wifi-bridge; }
 start() {
     if [ -f /etc/wifi-bridge/diskless ]; then
         /usr/bin/python3 /usr/libexec/astro-bridge-persist boot || return $?
+        if [ -f /etc/udev/rules.d/70-astro-bridge-asi.rules ]; then
+            # ASTRO_DATA is now mounted. Reload only; do not trigger USB or radios.
+            udevadm control --reload-rules || ewarn "udev_reload_failed"
+        fi
     elif ! id bridge >/dev/null 2>&1; then
         # Preserve the older persistent-root image path, provisioned at build time.
         adduser -D -h /home/bridge -s /bin/ash -G wheel bridge

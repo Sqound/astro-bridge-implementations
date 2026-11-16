@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "zwo": {
+    "version": "1.41",
+    "enabled": true,
+    "license": "MIT-style grant in ASI_linux_mac_SDK_V1.41/license.txt; see docs/DEPENDENCIES.md",
+    "url": "https://dl.zwoastro.com/software?app=DeveloperCameraSdk&platform=windows86&region=Overseas",
+    "sha256": "c6d59bf2de5b807f13d60d10b035e10dff31aeaa43391c6cd4782242126775ec",
+    "nested": "ASI_Camera_SDK/ASI_linux_mac_SDK_V1.41.tar.bz2",
+    "libraries": {
+      "armv6": "ASI_linux_mac_SDK_V1.41/lib/armv6/libASICamera2.so.1.41",
+      "arm64": "ASI_linux_mac_SDK_V1.41/lib/armv8/libASICamera2.so.1.41"
+    }
+  },
+  "qhy": {
+    "version": "26.07.28",
+    "enabled": false,
+    "reason": "License/CI/redistribution terms unresolved; ARM32 build declares ARMv7, not ARMv6. No execution authorized by this manifest.",
+    "sources": {
+      "arm32": {
+        "url": "https://www.qhyccd.com/file/repository/publish/SDK/260728/sdk_linux_arm32_26.07.28.tar.gz",
+        "sha256": "fc125b99ee875331ec7d7da9422c618cb396a8d5231e513d1b188001d6a6e561"
+      },
+      "arm64": {
+        "url": "https://www.qhyccd.com/file/repository/publish/SDK/260728/sdk_linux_arm64_26.07.28.tar.gz",
+        "sha256": "031b85aed0d0edb6d237f4c7e04741550c2e0b652c0b458461bccb9ae1de18dc"
+      }
+    }
+  }
+}

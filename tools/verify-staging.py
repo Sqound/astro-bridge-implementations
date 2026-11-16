@@ -11,14 +11,15 @@ spec=importlib.util.spec_from_file_location('core',ROOT/'tools/core-artifact.py'
 
 
 def main():
-    p=argparse.ArgumentParser();p.add_argument('--wheel',type=Path,required=True);args=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument('--wheel',type=Path,required=True);p.add_argument('--candidate-lock',type=Path);args=p.parse_args()
+    lock=core.candidate_lock(args.candidate_lock) if args.candidate_lock else None
     with tempfile.TemporaryDirectory(prefix='astro-staging-guard-') as folder:
         root=Path(folder);bad=root/args.wheel.name;shutil.copyfile(args.wheel,bad)
         with bad.open('ab') as stream:stream.write(b'modified')
-        try:core.verified(bad)
+        try:core.verified(bad,lock)
         except ValueError:pass
         else:raise AssertionError('Modified wheel accepted')
-        stage=root/'project';core.stage(args.wheel,stage)
+        stage=root/'project';core.stage(args.wheel,stage,lock)
         candidate_spec=importlib.util.spec_from_file_location('candidate',stage/'image/alpine/standard/candidate.py');candidate=importlib.util.module_from_spec(candidate_spec);candidate_spec.loader.exec_module(candidate)
         source=stage/'wifi_bridge/__init__.py';source.write_text('__version__ = "9.9.9"\n')
         snapshot=root/'snapshot';snapshot.mkdir()

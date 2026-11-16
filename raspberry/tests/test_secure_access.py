@@ -19,6 +19,7 @@ from wifi_bridge.secure_access import SecureAccess
 from wifi_bridge.tls import CertificateState, HTTPSService
 from wifi_bridge.web import WebServer
 from test_tls import diskless, execute, OPENSSL, TrustedConnection
+from helpers.clock_fixture import chrony_runner
 
 
 @unittest.skipUnless(OPENSSL, 'OpenSSL required')
@@ -26,7 +27,7 @@ class SecureAccessTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(); self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name); self.state, self.store = diskless(self.root)
-        self.helper = Certificates(self.root, run=execute)
+        self.helper = Certificates(self.root, run=chrony_runner(execute, synchronized=False))
         net = DemoNetwork(); self.controller = Controller(self.store, net, {'password': 'synthetic-password'}, demo=True)
         self.controller.update(devices=net.devices()); self.controller.cycle(0)
         self.http = WebServer(('127.0.0.1', 0), self.controller)
@@ -218,9 +219,23 @@ class SecureAccessTests(unittest.TestCase):
         self.helper.deactivate(); self.service.refresh()
         record = self.helper.record(); folder = self.helper.generation(record)
         # Produce a genuinely expired leaf using the real CA, without changing OS time.
-        execute([OPENSSL, 'x509', '-req', '-sha256', '-days', '0', '-in', str(folder / 'server.csr'),
-                 '-CA', str(folder / 'ca.pem'), '-CAkey', str(folder / 'ca.key'), '-set_serial', '0x1234',
-                 '-extfile', str(folder / 'leaf.conf'), '-out', str(folder / 'server.pem')], check=True, capture_output=True, text=True)
+        # `x509 -days 0` is rejected by newer OpenSSL. The CA command supports
+        # explicit historical validity dates on both older and newer versions.
+        (folder / 'expired-index').touch()
+        (folder / 'expired-serial').write_text('1234\n')
+        config = folder / 'expired-ca.conf'
+        config.write_text('[ca]\ndefault_ca=fixture\n[fixture]\n'
+                          f'database={folder / "expired-index"}\nserial={folder / "expired-serial"}\n'
+                          f'new_certs_dir={folder}\ncertificate={folder / "ca.pem"}\n'
+                          f'private_key={folder / "ca.key"}\n'
+                          'default_md=sha256\npolicy=fixture_policy\n'
+                          '[fixture_policy]\ncommonName=supplied\n')
+        execute([OPENSSL, 'ca', '-batch', '-notext', '-config', str(config),
+                 '-startdate', '20000101000000Z', '-enddate', '20000102000000Z',
+                 '-in', str(folder / 'server.csr'), '-extfile', str(folder / 'leaf.conf'),
+                 '-out', str(folder / 'server.pem')], check=True, capture_output=True, text=True)
+        expired = ssl._ssl._test_decode_cert(str(folder / 'server.pem'))
+        self.assertLess(ssl.cert_time_to_seconds(expired['notAfter']), time.time())
         (folder / 'server.pem').chmod(0o600)
         read = self.helper.read; names = []
         def public_read(path): names.append(path.name); return read(path)

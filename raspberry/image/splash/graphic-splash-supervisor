@@ -1,0 +1,26 @@
+#!/bin/sh
+# Keep a separate process available to restore text mode if the renderer dies.
+renderer=/usr/local/sbin/astro-graphic-splash
+child=
+stopped=0
+terminate() {
+    stopped=1
+    [ -z "$child" ] || kill -TERM "$child" 2>/dev/null || :
+}
+# Install before starting the child so an early signal cannot orphan it.
+trap terminate TERM INT
+if [ "$1" = --handoff ]; then
+    "$renderer" /usr/share/astro-bridge/boot-splash.ppm --handoff &
+else
+    "$renderer" /usr/share/astro-bridge/boot-splash.ppm &
+fi
+child=$!
+[ "$stopped" -eq 0 ] || kill -TERM "$child" 2>/dev/null || :
+wait "$child"
+status=$?
+# A trapped signal interrupts wait; reap the renderer after it handles TERM.
+if [ "$stopped" -ne 0 ]; then wait "$child"; status=$?; fi
+# Recovery is guarded by a PID token made before entering graphics mode.
+if [ "$1" != --handoff ] || [ "$status" -ne 0 ]; then "$renderer" --recover "$child"; fi
+if [ "$1" = --handoff ] && [ "$status" -ne 0 ]; then rm -f /run/astro-display-owned; fi
+exit "$status"

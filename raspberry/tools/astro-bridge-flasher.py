@@ -6,6 +6,9 @@ Raspberry Pi Imager engine performs writing and read-back verification. The OS
 requests administrator authorization; credentials never enter this application.
 """
 import argparse
+from contextlib import contextmanager
+import struct
+import unicodedata
 import platform
 import plistlib
 import re
@@ -14,6 +17,7 @@ import tempfile
 import time
 import hashlib
 import json
+import lzma
 import os
 from pathlib import Path
 import shutil
@@ -35,6 +39,86 @@ IMAGE_PLATFORMS = {
     'raspios': ('armhf', 'SHA256SUMS'),
 }
 CHECKSUM_LIMIT = 65536
+WIFI_SEED_OFFSET = 65536
+WIFI_SEED_SIZE = 4096
+WIFI_SEED_MARKER = b'ASTRO-WIFI-SEED-1\n'
+WIFI_IMAGE_SIZE = 1210056704
+
+
+def wifi_seed(settings):
+    """Validate without ever including credential values in errors."""
+    if not isinstance(settings, dict) or set(settings) != {'ssid', 'password', 'hidden', 'country'}:
+        raise ValueError('Invalid Wi-Fi settings.')
+    ssid, password, hidden, country = (settings[k] for k in ('ssid', 'password', 'hidden', 'country'))
+    try:
+        if not isinstance(ssid, str) or any(unicodedata.category(c) == 'Cc' for c in ssid):
+            raise ValueError
+        ssid_bytes = ssid.encode('utf-8')
+        if not 1 <= len(ssid_bytes) <= 32:
+            raise ValueError
+        if not isinstance(password, str):
+            raise ValueError
+        if re.fullmatch(r'[0-9a-fA-F]{64}', password):
+            psk = password.lower()
+        elif not any(unicodedata.category(c) == 'Cc' for c in password) and 8 <= len(password.encode('utf-8')) <= 63:
+            psk = hashlib.pbkdf2_hmac('sha1', password.encode('utf-8'), ssid_bytes, 4096, 32).hex()
+        else:
+            raise ValueError
+        if type(hidden) is not bool or not isinstance(country, str) or not re.fullmatch(r'[A-Z]{2}', country):
+            raise ValueError
+    except (ValueError, UnicodeError):
+        raise ValueError('Invalid Wi-Fi settings.') from None
+    payload = json.dumps({'ssid': ssid, 'psk': psk, 'hidden': hidden, 'country': country},
+                         ensure_ascii=True, separators=(',', ':')).encode('ascii') + b'\n'
+    if len(WIFI_SEED_MARKER) + len(payload) > WIFI_SEED_SIZE:
+        raise ValueError('Invalid Wi-Fi settings.')
+    return WIFI_SEED_MARKER + payload + bytes(WIFI_SEED_SIZE - len(WIFI_SEED_MARKER) - len(payload))
+
+
+def check_wifi_base(prefix):
+    if len(prefix) < WIFI_SEED_OFFSET + WIFI_SEED_SIZE or prefix[510:512] != b'\x55\xaa':
+        raise ValueError('This image does not support Wi-Fi preparation.')
+    first, second = (struct.unpack_from('<B3sB3sII', prefix, 446 + 16*i) for i in range(2))
+    if (first[0], first[2], first[4], first[5]) != (0x80, 0x06, 2048, 264192) or \
+       (second[0], second[2], second[4], second[5]) != (0, 0x83, 266240, 2097152) or \
+       any(prefix[478:510]) or prefix[WIFI_SEED_OFFSET:WIFI_SEED_OFFSET + WIFI_SEED_SIZE] != \
+       WIFI_SEED_MARKER + bytes(WIFI_SEED_SIZE - len(WIFI_SEED_MARKER)):
+        raise ValueError('This image does not support Wi-Fi preparation.')
+
+
+@contextmanager
+def personalized_image(image, checksum, disk_size, settings):
+    """Create a short-lived raw image, checking the compressed source twice."""
+    seed = wifi_seed(settings)
+    if not image.name.endswith('.img.xz'):
+        raise ValueError('This image does not support Wi-Fi preparation.')
+    if disk_size < WIFI_IMAGE_SIZE:
+        raise ValueError('The expanded image does not fit on this drive.')
+    verified(image, checksum)
+    parent = cache_directory() / 'personalized'
+    parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix='wifi-', dir=parent) as directory:
+        os.chmod(directory, 0o700)
+        target = Path(directory) / 'personalized.img'
+        digest = hashlib.sha256()
+        with image.open('rb') as source, os.fdopen(os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), 'wb') as out:
+            with lzma.LZMAFile(source) as stream:
+                prefix = stream.read(1024 * 1024)
+                check_wifi_base(prefix)
+                prefix = prefix[:WIFI_SEED_OFFSET] + seed + prefix[WIFI_SEED_OFFSET + WIFI_SEED_SIZE:]
+                size = len(prefix)
+                out.write(prefix); digest.update(prefix)
+                while chunk := stream.read(1024 * 1024):
+                    size += len(chunk)
+                    if size > WIFI_IMAGE_SIZE:
+                        raise ValueError('This image does not support Wi-Fi preparation.')
+                    out.write(chunk); digest.update(chunk)
+                if size != WIFI_IMAGE_SIZE:
+                    raise ValueError('This image does not support Wi-Fi preparation.')
+            source.seek(0)
+            if hashlib.file_digest(source, 'sha256').hexdigest() != checksum.lower():
+                raise ValueError('Image checksum mismatch. Nothing has been flashed.')
+        yield target.resolve(), digest.hexdigest()
 
 
 def external_options(command, options):
@@ -160,6 +244,8 @@ IMAGER_ASSETS = {
 
 
 def cache_directory():
+    if os.environ.get('ASTRO_BRIDGE_SETUP_CACHE'):
+        return Path(os.environ['ASTRO_BRIDGE_SETUP_CACHE'])
     if sys.platform == 'darwin':
         return Path.home() / 'Library/Caches/Astro-Bridge'
     if sys.platform == 'win32':
@@ -258,8 +344,14 @@ def isolated_disks():
     return json.loads(output)
 
 
-def validate_target(selected, isolated=False):
-    current = next((disk for disk in (isolated_disks() if isolated else disks()) if disk == selected), None)
+def validate_target(selected, isolated=False, setup=False):
+    if setup and (not isinstance(selected.get('identity'), str) or not selected['identity'].strip()
+                  or selected['identity'] == selected.get('device')):
+        raise ValueError('The removable drive has no stable hardware identity.')
+    rows = isolated_disks() if isolated else disks()
+    if setup:
+        rows = setup_media(rows)
+    current = next((disk for disk in rows if disk == selected), None)
     if not current:
         raise ValueError('The selected drive changed or disappeared. Refresh and select it again.')
     return current
@@ -332,6 +424,165 @@ def ensure_imager(notify=lambda text: None):
     return str(target)
 
 
+def setup_tree_digest(root):
+    """Fingerprint all engine files and symlinks in a private extracted tree."""
+    root = Path(root).resolve(strict=True)
+    digest = hashlib.sha256()
+    for path in sorted(root.rglob('*')):
+        relative = path.relative_to(root).as_posix()
+        digest.update(relative.encode('utf-8') + b'\0')
+        digest.update(str(path.lstat().st_mode).encode('ascii') + b'\0')
+        if path.is_symlink():
+            target = os.readlink(path)
+            if not path.resolve().is_relative_to(root):
+                raise ValueError('Imager contains a link outside its private directory.')
+            digest.update(b'L' + target.encode('utf-8') + b'\0')
+        elif path.is_file():
+            digest.update(b'F')
+            with path.open('rb') as stream:
+                digest.update(hashlib.file_digest(stream, 'sha256').digest())
+        elif path.is_dir():
+            digest.update(b'D')
+        else:
+            raise ValueError('Unexpected file in Imager.')
+    return digest.hexdigest()
+
+def windows_program_roots():
+    script = ("@([Environment]::GetFolderPath('ProgramFiles'),"
+              "[Environment]::GetFolderPath('ProgramFilesX86')) | ConvertTo-Json -Compress")
+    roots = json.loads(command_output(['powershell.exe', '-NoProfile', '-NonInteractive', '-Command', script], text=True, stderr=subprocess.PIPE))
+    if isinstance(roots, str):
+        roots = [roots]
+    if not isinstance(roots, list):
+        raise ValueError('Cannot determine system Program Files directories.')
+    return [Path(root).resolve() for root in roots if isinstance(root, str) and root]
+
+def windows_imager_candidates():
+    candidates = []
+    for root in windows_program_roots():
+        root = root.resolve()
+        for relative in ('Raspberry Pi Ltd/Imager/rpi-imager.exe', 'Raspberry Pi Imager/rpi-imager.exe'):
+            candidate = root / relative
+            if candidate.resolve().is_relative_to(root):
+                candidates.append(candidate)
+    return candidates
+
+def windows_signature(path):
+    script = ("$ErrorActionPreference='Stop'; $p=" + ps_literal(str(path)) + "; "
+              "$s=Get-AuthenticodeSignature -LiteralPath $p; $v=(Get-Item -LiteralPath $p).VersionInfo; "
+              "@{status=[string]$s.Status; thumbprint=$s.SignerCertificate.Thumbprint; "
+              "file=$v.FileVersion; product=$v.ProductVersion} | ConvertTo-Json -Compress")
+    data = json.loads(command_output(['powershell.exe', '-NoProfile', '-NonInteractive', '-Command', script], text=True, stderr=subprocess.PIPE))
+    if not isinstance(data, dict) or data.get('status') != 'Valid' or not re.fullmatch(r'[A-Fa-f0-9]{40,128}', data.get('thumbprint') or ''):
+        raise ValueError('Imager Authenticode signature is not valid.')
+    return data
+
+def windows_engine_metadata(engine, installer_thumb):
+    engine = Path(engine).resolve(strict=True)
+    candidates = [candidate.resolve() for candidate in windows_imager_candidates()]
+    if engine not in candidates or not engine.is_file():
+        raise ValueError('Imager is not in a system Program Files location.')
+    signature = windows_signature(engine)
+    if signature['thumbprint'].upper() != installer_thumb.upper():
+        raise ValueError('Imager publisher does not match the pinned installer.')
+    versions = [signature.get(k) for k in ('file', 'product') if signature.get(k)]
+    if not versions or any(not re.fullmatch(r'2\.0\.12(?:\.0)?', version.strip()) for version in versions):
+        raise ValueError('Installed Imager does not have the pinned version.')
+    with engine.open('rb') as stream:
+        return hashlib.file_digest(stream, 'sha256').hexdigest()
+
+def windows_find_engine(thumbprint):
+    for candidate in windows_imager_candidates():
+        if candidate.is_file():
+            try:
+                digest = windows_engine_metadata(candidate, thumbprint)
+                return str(candidate.resolve()), digest
+            except (ValueError, OSError, subprocess.SubprocessError):
+                continue
+    return None
+
+def prepare_setup_imager(directory, notify):
+    """Derive a fresh engine exclusively from the pinned verified vendor asset."""
+    key = 'linux-' + platform.machine().lower() if sys.platform.startswith('linux') else sys.platform
+    if key not in IMAGER_ASSETS:
+        raise ValueError('This platform has no pinned Setup Imager.')
+    name, checksum = IMAGER_ASSETS[key]
+    source = checked_download(f'https://github.com/raspberrypi/rpi-imager/releases/download/{IMAGER_VERSION}/{name}',
+                              cache_directory() / IMAGER_VERSION / name, checksum, notify)
+    # Canonical paths: the pre-launch check compares against the resolved engine root,
+    # so a symlinked cache or temporary directory (macOS /var) must not differ.
+    directory = Path(directory).resolve(strict=True)
+    asset = directory / name
+    shutil.copyfile(source, asset)
+    with asset.open('rb') as stream:
+        if hashlib.file_digest(stream, 'sha256').hexdigest() != checksum:
+            raise ValueError('Pinned Imager asset changed during preparation.')
+    notify('Preparing verified Raspberry Pi Imager…')
+    if key == 'win32':
+        thumbprint = windows_signature(asset)['thumbprint']
+        found = windows_find_engine(thumbprint)
+        if found is None:
+            notify('Installing verified Raspberry Pi Imager; system authorization is required…')
+            process = elevated([str(asset), '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-'])
+            output = process.communicate()[0]
+            if process.returncode:
+                raise ValueError('Imager installation failed or was cancelled: ' + output[-1000:])
+            found = windows_find_engine(thumbprint)
+        if found is None:
+            raise ValueError('No signed Imager with the pinned version was found in Program Files.')
+        engine, engine_digest = found
+        return engine, {'asset': str(asset), 'key': key, 'thumbprint': thumbprint, 'engine_sha256': engine_digest}
+    if key == 'darwin':
+        root = directory / 'Raspberry Pi Imager.app'
+        mounted = plistlib.loads(command_output(['hdiutil', 'attach', '-readonly', '-nobrowse', '-plist', str(asset)], stderr=subprocess.PIPE))
+        mount = next(e['mount-point'] for e in mounted['system-entities'] if 'mount-point' in e)
+        try:
+            source_app = next(Path(mount).glob('*.app'))
+            run_command(['ditto', str(source_app), str(root)], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        finally:
+            run_command(['hdiutil', 'detach', mount], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        run_command(['codesign', '--verify', '--deep', '--strict', str(root)], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        engine = root / 'Contents/MacOS/rpi-imager'
+    else:
+        asset.chmod(0o700)
+        run_command([str(asset), '--appimage-extract'], cwd=directory, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        root = directory / 'squashfs-root'
+        engine = root / 'AppRun'
+    if not engine.is_file():
+        raise ValueError('The verified Imager engine is missing.')
+    return str(engine), {'root': str(root), 'asset': str(asset), 'key': key, 'tree': setup_tree_digest(root)}
+
+def verify_setup_imager(engine, provenance):
+    key = 'linux-' + platform.machine().lower() if sys.platform.startswith('linux') else sys.platform
+    if key not in IMAGER_ASSETS or provenance.get('key') != key:
+        raise ValueError('Unsupported Imager provenance.')
+    asset = Path(provenance['asset'])
+    expected_name, expected_hash = IMAGER_ASSETS[key]
+    if key == 'win32':
+        if asset.name != expected_name:
+            raise ValueError('Invalid Imager installer location.')
+        with asset.open('rb') as stream:
+            if hashlib.file_digest(stream, 'sha256').hexdigest() != expected_hash:
+                raise ValueError('Pinned Imager installer changed before launch.')
+        thumbprint = windows_signature(asset)['thumbprint']
+        if thumbprint.upper() != provenance['thumbprint'].upper():
+            raise ValueError('Imager installer signer changed before launch.')
+        if windows_engine_metadata(engine, thumbprint) != provenance['engine_sha256']:
+            raise ValueError('Installed Imager changed before launch.')
+        return
+    root = Path(provenance['root']).resolve(strict=True)
+    expected_engine = root / ('Contents/MacOS/rpi-imager' if key == 'darwin' else 'AppRun')
+    if Path(engine) != expected_engine or asset.name != expected_name or asset.parent != root.parent:
+        raise ValueError('Invalid Imager engine location.')
+    with asset.open('rb') as stream:
+        if hashlib.file_digest(stream, 'sha256').hexdigest() != expected_hash:
+            raise ValueError('Pinned Imager asset changed before launch.')
+    if setup_tree_digest(root) != provenance['tree']:
+        raise ValueError('Imager engine changed before launch.')
+    if key == 'darwin':
+        run_command(['codesign', '--verify', '--deep', '--strict', str(root)], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+
 def check_source_drive(image, selected):
     """The image must survive erasing the destination drive."""
     if sys.platform == 'win32':
@@ -380,11 +631,14 @@ def flash_worker(job_path):
         try:
             report('Checking the image and selected drive…')
             image = verified(Path(job['image']), job['sha256'])
-            validate_target(job['disk'])
+            validate_target(job['disk'], setup=job.get('setup') is True)
             check_source_drive(image, job['disk'])
             check_source_drive(Path(job['engine']), job['disk'])
             check_source_drive(Path(sys.executable), job['disk'])
-            report('Writing the card. Keep the reader connected…')
+            if job.get('setup') is True:
+                verify_setup_imager(job['engine'], job['provenance'])
+            report('Starting Imager; keep the reader connected…' if job.get('setup') is True
+                   else 'Writing the card. Keep the reader connected…')
             process = start_command(engine_command(job['engine'], image, job['disk']['device']),
                                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
                                        errors='replace', env=dict(os.environ, QT_QPA_PLATFORM='offscreen'))
@@ -437,20 +691,29 @@ def stage_image(image, checksum, notify=lambda text: None):
     return destination.resolve()
 
 
-def write_card(image, selected, notify=lambda text: None, checksum=None):
+def write_card(image, selected, notify=lambda text: None, checksum=None, setup=False, personalized=False):
+    """Keep a fresh Setup engine alive until the worker has exited."""
+    if setup:
+        directory = cache_directory() / 'engines'
+        directory.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix='setup-', dir=directory) as private:
+            return _write_card(image, selected, notify, checksum, setup, private, personalized)
+    return _write_card(image, selected, notify, checksum, setup, None, personalized)
+
+def _write_card(image, selected, notify, checksum, setup, private, personalized):
     """Prepare the engine before the privileged worker revalidates the target."""
-    validate_target(selected, isolated=True)
+    validate_target(selected, isolated=True, setup=setup)
     check_source_drive(image, selected)
-    executable = ensure_imager(notify)
-    validate_target(selected, isolated=True)
+    executable, provenance = prepare_setup_imager(private, notify) if setup else (ensure_imager(notify), None)
+    validate_target(selected, isolated=True, setup=setup)
     notify('Checking image integrity before writing…')
     if not checksum:
         raise ValueError('A previously verified image checksum is required.')
-    image = stage_image(image, checksum, notify)
+    image = verified(image, checksum) if personalized else stage_image(image, checksum, notify)
     check_source_drive(image, selected)
     with tempfile.TemporaryDirectory(prefix='astro-bridge-flash-') as directory:
         job_path = Path(directory) / 'job.json'
-        job_path.write_text(json.dumps(dict(image=str(image), sha256=checksum, disk=selected, engine=executable)))
+        job_path.write_text(json.dumps(dict(image=str(image), sha256=checksum, disk=selected, engine=executable, setup=setup, provenance=provenance)))
         command = [sys.executable] if getattr(sys, 'frozen', False) else [sys.executable, str(Path(__file__).resolve())]
         notify('Imager will request permission to access the selected card…' if sys.platform == 'darwin'
                else 'Waiting for system authorization…')
@@ -684,8 +947,82 @@ def gui(initial_image=None, image_platform="alpine-standard"):
     window.mainloop()
 
 
+def setup_media(rows=None):
+    # An ambiguous identity or device cannot designate one exact drive.
+    rows = disks() if rows is None else rows
+    eligible = [d for d in rows if isinstance(d.get('identity'), str)
+                and d['identity'].strip() and d['identity'] != d.get('device')
+                and isinstance(d.get('device'), str) and d['device']
+                and isinstance(d.get('size'), int) and d['size'] > 0]
+    return [d for d in eligible if sum(x['identity'] == d['identity'] for x in eligible) == 1
+            and sum(x['device'] == d['device'] for x in eligible) == 1]
+
+def setup_command():
+    def emit(value):
+        print(json.dumps(value), flush=True)
+    try:
+        request = json.loads(sys.stdin.readline(65537))
+        if not isinstance(request, dict) or request.get('command') not in ('list', 'flash'):
+            raise ValueError('Invalid setup request.')
+        if request['command'] == 'list':
+            emit({'media': setup_media()})
+            return 0
+        if set(request) not in ({'command', 'image', 'sha256', 'disk'}, {'command', 'image', 'sha256', 'disk', 'wifi'}):
+            raise ValueError('Invalid setup request fields.')
+        disk = request['disk']
+        if not isinstance(disk, dict) or disk not in setup_media():
+            raise ValueError('The selected drive changed or disappeared.')
+        image = verified(Path(request['image']), request['sha256'])
+        emit({'phase': 'preparing', 'message': 'Checking expanded image size…'})
+        wifi = request.get('wifi')
+        size = 0
+        opener = lzma.open if image.name.endswith('.xz') else open
+        if wifi is None:
+            with opener(image, 'rb') as stream:
+                while chunk := stream.read(1024 * 1024):
+                    size += len(chunk)
+                    if size > disk['size']:
+                        raise ValueError('The expanded image does not fit on this drive.')
+            if not size:
+                raise ValueError('The image is empty.')
+        phase = 'preparing'
+        def notify(message):
+            nonlocal phase
+            lower = message.lower()
+            # Only Imager's stage lines advance the operation after authorization.
+            # Earlier integrity checks are preparation, not card read-back.
+            if phase in ('authorizing', 'media_preparing') and re.match(r'^(?:unmounting (?:drive|volumes)|opening drive|cleaning disk|waiting for drive to become available|zero[’\']?ing out)\b', lower):
+                phase = 'media_preparing'
+            elif phase in ('authorizing', 'media_preparing', 'writing') and re.match(r'^(?:verifying|verification|reading back)\b', lower):
+                phase = 'flash_verifying'
+            elif phase in ('authorizing', 'media_preparing') and re.match(r'^writing\b', lower):
+                phase = 'writing'
+            elif phase == 'preparing' and ('permission' in lower or 'authorization' in lower):
+                phase = 'authorizing'
+            emit({'phase': phase, 'message': message})
+        if wifi is None:
+            write_card(image, disk, notify, request['sha256'], setup=True)
+        else:
+            emit({'phase': 'preparing', 'message': 'Preparing the image with Wi-Fi settings…'})
+            with personalized_image(image, request['sha256'], disk['size'], wifi) as (raw, raw_checksum):
+                write_card(raw, disk, notify, raw_checksum, setup=True, personalized=True)
+        emit({'success': True})
+        return 0
+    except Exception as error:
+        if isinstance(locals().get('request'), dict) and locals()['request'].get('wifi') is not None:
+            safe_errors = {'Invalid Wi-Fi settings.', 'This image does not support Wi-Fi preparation.',
+                           'The expanded image does not fit on this drive.',
+                           'Image checksum mismatch. Nothing has been flashed.'}
+            message = str(error) if isinstance(error, ValueError) and str(error) in safe_errors else 'Unable to prepare or write the personalized image.'
+            emit({'error': message})
+        else:
+            emit({'error': str(error)})
+        return 1
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--setup-protocol', action='store_true', help=argparse.SUPPRESS)
     parser.add_argument('--list-disks', action='store_true', help='List eligible removable drives without writing')
     parser.add_argument('--flash-worker', type=Path, help=argparse.SUPPRESS)
     parser.add_argument('--gui', action='store_true', help='Open the native preparation window')
@@ -698,6 +1035,8 @@ def main():
     parser.add_argument('--cache', type=Path, default=Path.home() / 'Downloads/Astro-Bridge')
     parser.add_argument('--verify-only', action='store_true', help='Verify without launching or writing a disk')
     args = parser.parse_args()
+    if args.setup_protocol:
+        raise SystemExit(setup_command())
     if args.self_test:
         import tkinter
         window = tkinter.Tk(); window.withdraw(); window.update_idletasks(); window.destroy()

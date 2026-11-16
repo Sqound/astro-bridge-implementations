@@ -11,5 +11,5 @@ profile_astrobridge() {
       openssh openssh-server-common-openrc wpa_supplicant e2fsprogs-extra \
       chrony chrony-openrc dbus dbus-openrc hostapd dnsmasq avahi avahi-openrc \
       nftables conntrack-tools iw iproute2 wireless-regdb linux-firmware-brcm linux-firmware-rtw88 eudev eudev-openrc usb-modeswitch usb-modeswitch-udev \
-      shadow sudo ca-certificates openssl py3-cryptography py3-http-ece"
+      gcompat shadow sudo ca-certificates openssl py3-cryptography py3-http-ece"
 }

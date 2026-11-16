@@ -8,6 +8,11 @@ import threading
 import unittest
 from unittest.mock import patch
 
+if __package__:
+    from .helpers.clock_fixture import event_clock
+else:
+    from helpers.clock_fixture import event_clock
+
 from wifi_bridge.config import Invalid, Store, password_matches, public_config, validate_config
 from wifi_bridge.controller import Controller
 from wifi_bridge.network import DemoNetwork, LinuxNetwork, NetworkError, keyfile, split_nm, radio_bands
@@ -23,6 +28,7 @@ def payload(devices):
 
 class Fixture(unittest.TestCase):
     def setUp(self):
+        self.enterContext(event_clock(synchronized=False))
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.net = DemoNetwork()

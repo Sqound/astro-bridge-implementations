@@ -1,0 +1,26 @@
+#!/bin/sh
+# Wait off the OpenRC critical path for a usable HDMI framebuffer.
+owned=0
+trap '[ "$owned" -eq 0 ] || rm -f /run/astro-display-owned; rmdir /run/astro-display-claim 2>/dev/null; exit 0' TERM INT
+attempt=0
+while [ "$attempt" -lt 8 ]; do
+    active=$(cat /sys/class/tty/tty0/active 2>/dev/null)
+    [ -z "$active" ] || [ "$active" = tty1 ] || break
+    connectors=0; connected=0
+    for status in /sys/class/drm/card*-HDMI-A-*/status; do
+        [ -f "$status" ] || continue
+        connectors=1
+        [ "$(cat "$status" 2>/dev/null)" != connected ] || connected=1
+    done
+    if { [ "$connectors" -eq 0 ] || [ "$connected" -eq 1 ]; } &&
+       [ "$active" = tty1 ] && [ -c /dev/fb0 ] && [ -c /dev/tty7 ]; then
+        [ ! -e /run/astro-display-owned ] || break
+        owned=1
+        : > /run/astro-display-owned || break
+        rmdir /run/astro-display-claim 2>/dev/null || :
+        exec /usr/local/sbin/astro-graphic-splash-supervisor --handoff
+    fi
+    attempt=$((attempt + 1))
+    sleep 1
+done
+rmdir /run/astro-display-claim 2>/dev/null || :

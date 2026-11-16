@@ -349,7 +349,9 @@ class HTTPSPairTests(unittest.TestCase):
         # A valid active TLS state blocks supported hostname changes until disable.
         self.helper.deactivate(reset=True)
         self.helper.prepare({'owner_confirmed_utc': int(time.time())})
-        rename = dict(self.store.config, hostname='new-host', home={'ssid': 'synthetic-home', 'open': True, 'mac': self.controller.state['devices'][0]['mac']}, telescopes=[])
+        hotspot_mac = self.controller.state['hotspot']['mac']
+        home_device = next(d for d in self.controller.state['devices'] if d['mac'] != hotspot_mac)
+        rename = dict(self.store.config, hostname='new-host', home={'ssid': 'synthetic-home', 'open': True, 'mac': home_device['mac']}, telescopes=[])
         with self.assertRaisesRegex(Invalid, 'Disable HTTPS'): self.controller.save(rename)
         self.helper.deactivate()
         self.controller.save(rename)

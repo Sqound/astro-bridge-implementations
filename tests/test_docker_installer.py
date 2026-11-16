@@ -46,7 +46,7 @@ class DockerInstallerTests(unittest.TestCase):
 
     def test_extraction_rejects_parent_escape_symlink_and_other_root(self):
         tool=installer()
-        for name,kind in [('astro_bridge_implementations-1.0.1/../escape',None),('astro_bridge_implementations-1.0.1/link',tarfile.SYMTYPE),('another-root/file',None)]:
+        for name,kind in [('astro_bridge_implementations-1.1.0/../escape',None),('astro_bridge_implementations-1.1.0/link',tarfile.SYMTYPE),('another-root/file',None)]:
             with tempfile.TemporaryDirectory() as folder:
                 prefix=Path(folder)/'new'
                 with self.assertRaises(ValueError):tool.unpack(archive(name,kind),prefix)
@@ -55,7 +55,7 @@ class DockerInstallerTests(unittest.TestCase):
     def test_verified_layout_is_extracted_without_existing_prefix_overwrite(self):
         tool=installer()
         with tempfile.TemporaryDirectory() as folder:
-            root=Path(folder)/'new';data=archive('astro_bridge_implementations-1.0.1/README.md')
+            root=Path(folder)/'new';data=archive('astro_bridge_implementations-1.1.0/README.md')
             tool.unpack(data,root);self.assertEqual((root/'README.md').read_text(),'demo')
             with self.assertRaises(FileExistsError):tool.unpack(data,root)
             self.assertEqual((root/'README.md').read_text(),'demo')

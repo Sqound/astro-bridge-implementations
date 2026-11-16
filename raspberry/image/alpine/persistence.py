@@ -239,7 +239,13 @@ class Persistence:
         if MIN_TIME <= value <= MAX_TIME:
             self.atomic(self.state / 'clock-lower-bound', str(value).encode())
 
+    def lock_root(self):
+        # The console administrator is "bridge" (sudo); root never keeps the
+        # empty password of a diskless Alpine root file system.
+        self.command(['/usr/sbin/chpasswd', '-e'], input='root:!\n')
+
     def boot(self):
+        self.lock_root()
         with self.locked():
             self.account()
             self.host_keys()

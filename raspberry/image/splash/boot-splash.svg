@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="270" viewBox="0 0 480 270">
+<rect width="480" height="270" fill="black"/>
+<!-- Product mark from tools/brand/astro-bridge.svg, without altering its geometry. -->
+<svg x="96" y="12" width="288" height="192" viewBox="0 0 240 160" color="#d7a24e">
+<title id="bridge-logo-title">Astro Bridge</title>
+<!-- PlanAstro brand geometry: cut ring, eight branches, clockwise tilt 22 degrees. -->
+<g fill="none" stroke="currentColor" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round">
+<path d="M19 91V59a17 17 0 0 1 34 0v32a9 9 0 0 1-9 9H28a9 9 0 0 1-9-9Z"/>
+<circle cx="36" cy="61" r="10"/>
+<path d="M29 100v10m14-10v10M14 122l6-12h32l6 12Z"/>
+<rect x="182" y="38" width="44" height="84" rx="8"/>
+<path d="M196 47h16M200 112h8"/>
+<path d="M62 80h16M162 80h16" stroke-width="3.5" stroke-dasharray="1 8"/>
+</g>
+<g transform="translate(120 80) scale(.5)">
+<mask id="astro-bridge-star-cut" maskUnits="userSpaceOnUse" x="-80" y="-80" width="160" height="160"><rect x="-80" y="-80" width="160" height="160" fill="#fff"/><g transform="rotate(22)" fill="#000" stroke="#000" stroke-width="6" stroke-linejoin="round"><path d="M-8 0Q-0.96 -15.600000000000001 0 -78Q0.96 -15.600000000000001 8 0Z" transform="rotate(0)"/><path d="M-8 0Q-0.96 -15.600000000000001 0 -78Q0.96 -15.600000000000001 8 0Z" transform="rotate(90)"/><path d="M-8 0Q-0.96 -15.600000000000001 0 -78Q0.96 -15.600000000000001 8 0Z" transform="rotate(180)"/><path d="M-8 0Q-0.96 -15.600000000000001 0 -78Q0.96 -15.600000000000001 8 0Z" transform="rotate(270)"/></g></mask><circle r="36" fill="none" stroke="currentColor" stroke-width="10.3" mask="url(#astro-bridge-star-cut)"/><g transform="rotate(22)" fill="currentColor"><path d="M-8 0Q-0.96 -15.600000000000001 0 -78Q0.96 -15.600000000000001 8 0Z" transform="rotate(0)"/><path d="M-5.3 0Q-0.636 -4.2 0 -21Q0.636 -4.2 5.3 0Z" transform="rotate(45)"/><path d="M-8 0Q-0.96 -15.600000000000001 0 -78Q0.96 -15.600000000000001 8 0Z" transform="rotate(90)"/><path d="M-5.3 0Q-0.636 -4.2 0 -21Q0.636 -4.2 5.3 0Z" transform="rotate(135)"/><path d="M-8 0Q-0.96 -15.600000000000001 0 -78Q0.96 -15.600000000000001 8 0Z" transform="rotate(180)"/><path d="M-5.3 0Q-0.636 -4.2 0 -21Q0.636 -4.2 5.3 0Z" transform="rotate(225)"/><path d="M-8 0Q-0.96 -15.600000000000001 0 -78Q0.96 -15.600000000000001 8 0Z" transform="rotate(270)"/><path d="M-5.3 0Q-0.636 -4.2 0 -21Q0.636 -4.2 5.3 0Z" transform="rotate(315)"/><circle r="7.9"/></g>
+</g>
+</svg>
+<text x="240" y="231" text-anchor="middle" font-family="sans-serif" font-size="22" fill="#d7a24e">Astro Bridge is booting</text>
+</svg>

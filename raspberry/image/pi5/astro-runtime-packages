@@ -1,0 +1,32 @@
+#!/sbin/openrc-run
+name="Astro Bridge offline runtime packages"
+depend() { need astro-data; before networkmanager wifi-bridge; }
+start() {
+    local cache=/media/mmcblk0p2/cache file hash rest status
+    [ -b /dev/mmcblk0p2 ] || return 1
+    local label_record
+    label_record=$(busybox blkid /dev/mmcblk0p2) || return 1
+    case " $label_record " in *' LABEL="ASTRO_DATA" '*) :;; *) return 1;; esac
+    # The source must be the exact p2 device, mounted rw as ext4; no fallback to RAM.
+    awk '$1 == "/dev/mmcblk0p2" && $2 == "/media/mmcblk0p2" && $3 == "ext4" && $4 ~ /(^|,)rw(,|$)/ {ok=1} END {exit !ok}' /proc/mounts || return 1
+    [ -f /etc/wifi-bridge/base-world ] && cmp -s /etc/apk/world /etc/wifi-bridge/base-world || return 1
+    [ -f "$cache/astro-packages.sha256" ] && [ ! -L "$cache/astro-packages.sha256" ] || return 1
+    set --
+    while read -r hash file rest; do
+        [ -z "$rest" ] || return 1
+        case "$hash" in *[!0-9a-f]*|'') return 1;; esac
+        [ "${#hash}" -eq 64 ] || return 1
+        case "$file" in ''|*[!A-Za-z0-9_.+-]*|.*) return 1;; esac
+        case "$file" in *.apk) :;; *) return 1;; esac
+        [ -f "$cache/$file" ] && [ ! -L "$cache/$file" ] || return 1
+        [ "$(sha256sum "$cache/$file" | cut -d ' ' -f 1)" = "$hash" ] || return 1
+        set -- "$@" "$cache/$file"
+    done < "$cache/astro-packages.sha256"
+    [ "$#" -gt 0 ] || return 1
+    # Every APK remains subject to Alpine's normal signature validation.
+    apk add --network=no --no-cache --force-non-repository --virtual .astro-bridge-runtime "$@"
+    status=$?
+    # Diskless boot must continue to restore ONLY the unchanged base world.
+    cp /etc/wifi-bridge/base-world /etc/apk/world || return 1
+    return "$status"
+}

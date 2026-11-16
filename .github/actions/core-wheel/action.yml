@@ -1,0 +1,29 @@
+name: Core wheel
+description: Put the Core wheel pinned by core.lock.json in build/core, fetched from its release or built from a local Core tree.
+inputs:
+  root:
+    description: Implementations tree
+    default: .
+  core:
+    description: Optional Core source tree to build the wheel from (before the Core release exists)
+    default: ''
+runs:
+  using: composite
+  steps:
+    - name: Fetch or build, then verify against core.lock.json
+      shell: bash
+      working-directory: ${{ inputs.root }}
+      env:
+        CORE_TREE: ${{ inputs.core }}
+      run: |
+        set -euo pipefail
+        wheel=$(python -c "import json;print(json.load(open('core.lock.json'))['asset'])")
+        if [ -f "build/core/$wheel" ]; then
+          echo "Using the wheel already in build/core"
+        elif [ -n "$CORE_TREE" ]; then
+          python "$CORE_TREE/tools/build-release.py" --output build/core >/dev/null
+        else
+          python tools/core-artifact.py fetch --output build/core
+        fi
+        python tools/core-artifact.py verify "build/core/$wheel" >/dev/null
+        echo "CORE_WHEEL=$PWD/build/core/$wheel" >> "$GITHUB_ENV"

@@ -46,6 +46,7 @@ class AlpineOverlayTests(unittest.TestCase):
                 self.assertIn("conntrack-tools", world)
                 self.assertIn("usb-modeswitch", world)
                 self.assertIn("usb-modeswitch-udev", world)
+                self.assertIn("gcompat", world)
                 # The udev subpackage installs the official dispatcher/rules;
                 # udev-trigger must run at boot to apply it to attached dongles.
                 self.assertEqual(archive.getmember("./etc/runlevels/sysinit/udev-trigger").linkname, "/etc/init.d/udev-trigger")
@@ -63,7 +64,7 @@ class AlpineOverlayTests(unittest.TestCase):
                 self.assertEqual(archive.getmember("./usr/libexec/astro-bridge-ota").mode, 0o755)
                 self.assertEqual(archive.extractfile("./usr/libexec/astro-bridge-ota").read(), (project/"scripts/ota.py").read_bytes())
                 self.assertEqual(archive.getmember("./etc/periodic/daily/astro-bridge-updates").mode, 0o755)
-                self.assertEqual(archive.extractfile("./etc/wifi-bridge/updater-version").read().strip(), b"2")
+                self.assertEqual(archive.extractfile("./etc/wifi-bridge/updater-version").read().strip(), b"3")
 
                 self.assertNotIn("./etc/runlevels/boot/hwclock", archive.getnames())
                 self.assertIn(b"ipv6", archive.extractfile("./etc/modules").read().splitlines())
@@ -76,6 +77,17 @@ class AlpineOverlayTests(unittest.TestCase):
                 self.assertEqual(archive.getmember("./etc/init.d/astro-bridge-provision").mode, 0o755)
                 self.assertEqual(archive.getmember("./etc/init.d/wifi-bridge").mode, 0o755)
                 self.assertIn("./opt/wifi-bridge/wifi_bridge/static/i18n.js", archive.getnames())
+                self.assertEqual(archive.getmember('./etc/udev/rules.d/70-astro-bridge-asi.rules').linkname,
+                                 '/var/lib/wifi-bridge/camera-drivers/zwo-1.41/70-astro-bridge-asi.rules')
+                for rel in ('zwo_asi.py', 'zwo_process.py', 'zwo_platform.py', 'tables/zwo_asi.json'):
+                    installed = './opt/wifi-bridge/wifi_bridge/cameras/' + rel
+                    self.assertEqual(archive.extractfile(installed).read(), (project/'wifi_bridge/cameras'/rel).read_bytes())
+                self.assertFalse(any('libASICamera2.so' in name or 'install-zwo' in name for name in archive.getnames()))
+                for source in (project / 'wifi_bridge/telemetry').glob('*.py'):
+                    name = './opt/wifi-bridge/wifi_bridge/telemetry/' + source.name
+                    self.assertEqual(archive.extractfile(name).read(), source.read_bytes())
+                    self.assertEqual(archive.getmember(name).mode, 0o644)
+                self.assertFalse(any('__pycache__' in name or name.endswith('.pyc') for name in archive.getnames()))
 
     def test_package_is_available_in_media_as_well_as_overlay_world(self):
         project = Path(__file__).resolve().parents[1]
@@ -88,6 +100,7 @@ class AlpineOverlayTests(unittest.TestCase):
         self.assertIn("conntrack-tools", output)
         self.assertIn("usb-modeswitch", output)
         self.assertIn("usb-modeswitch-udev", output)
+        self.assertIn("gcompat", output)
 
 
 if __name__ == "__main__":

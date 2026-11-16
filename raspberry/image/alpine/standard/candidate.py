@@ -16,6 +16,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
 from wifi_bridge.ota import source_identity
+from wifi_bridge.privacy import public_artifact
 
 
 def digest(path):
@@ -28,10 +29,19 @@ def version():
 
 
 def stamp(app):
-    # Same flat source allowlist/hash as application OTA, never copy host bytecode.
-    files = {'wifi_bridge/'+str(p.relative_to(app)):p.read_bytes() for p in app.rglob('*')
-             if p.is_file() and (len(p.relative_to(app).parts)==1 and p.suffix=='.py'
-               or len(p.relative_to(app).parts)==2 and p.parent.name=='static')}
+    # Source installers include Python subpackages, never host bytecode.
+    files = {}
+    for p in app.rglob('*'):
+        relative = p.relative_to(app)
+        if '__pycache__' in relative.parts or not p.is_file(): continue
+        if p.is_symlink(): raise ValueError('Source identity cannot follow symlinks.')
+        content = p.read_bytes()
+        name = 'wifi_bridge/' + str(relative)
+        public_artifact(name, content)
+        if any(part.startswith('.') for part in relative.parts): continue
+        table = relative.parts[:2] == ('cameras','tables') and len(relative.parts) == 3 and p.suffix == '.json'
+        if p.suffix == '.py' or relative.parts[0] == 'static' or table:
+            files[name] = content
     identity=source_identity(files)
     (app/'build.py').write_text(f'BUILD_ID = "{identity}"\n')
     return identity
@@ -72,7 +82,7 @@ def prepare(output, snapshot):
         commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip()
         dirty=bool(subprocess.check_output(['git','status','--porcelain','--untracked-files=normal'],cwd=ROOT,text=True))
         prefixes=('wifi_bridge','image/alpine/standard','image/alpine/openrc','image/alpine/persistence.py',
-                  'scripts/tls.py','scripts/install-push-runtime.py','systemd/wifi-bridge-http.service')
+                  'scripts/tls.py','scripts/install-push-runtime.py','scripts/copy-app.py','systemd/wifi-bridge-http.service')
         names=subprocess.check_output(['git','ls-tree','-r','--name-only',commit,'--',*prefixes],cwd=ROOT,text=True).splitlines()
         files={}
         for name in names:
@@ -81,6 +91,7 @@ def prepare(output, snapshot):
             entry=subprocess.check_output(['git','ls-tree',commit,'--',name],cwd=ROOT,text=True)
             if not entry.startswith('100644 ') and not entry.startswith('100755 '):raise ValueError('Only regular tracked source files are allowed.')
             content=subprocess.check_output(['git','show',commit+':'+name],cwd=ROOT)
+            public_artifact(name, content)
             target=snapshot/name;target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(content)
             files[name]=content
     if 'image/alpine/standard/candidate.py'not in files or 'image/alpine/standard/inputs.json'not in files:
@@ -161,6 +172,7 @@ def overlay(boot):
             name=member.name.removeprefix('./')
             if name in members or name.startswith('/') or '..'in Path(name).parts or any(part.startswith('._') for part in Path(name).parts):
                 raise ValueError('Unsafe/duplicate or host metadata overlay entry.')
+            public_artifact(name, b'')
             members[name]=member
         if members['.'].mode!=0o755:raise ValueError('Overlay root must be traversable.')
         for name in ('etc/wifi-bridge','etc/NetworkManager/system-connections','var/lib/wifi-bridge'):
@@ -173,10 +185,12 @@ def overlay(boot):
         world=read('etc/apk/world').decode().splitlines()
         files={name.removeprefix('opt/wifi-bridge/'):read(name) for name,m in members.items()
                if name.startswith('opt/wifi-bridge/wifi_bridge/') and m.isfile()}
+        for name, content in files.items():
+            public_artifact(name, content)
         identity=source_identity(files)
         if files.get('wifi_bridge/build.py')!=f'BUILD_ID = "{identity}"\n'.encode():raise ValueError('Unstamped/mismatched application identity.')
-        for name in ('updater-version','tls-helper-version'):
-            if read('etc/wifi-bridge/'+name).strip()!=b'2':raise ValueError('Unsupported OS helper version.')
+        for name, expected in (('updater-version', b'3'), ('tls-helper-version', b'2')):
+            if read('etc/wifi-bridge/'+name).strip()!=expected:raise ValueError('Unsupported OS helper version.')
         link=members.get('usr/sbin/rfkill')
         if not link or not link.issym() or link.linkname!='/bin/busybox':raise ValueError('Explicit rfkill BusyBox link missing.')
         for name in ('sshd','wifi-bridge','astro-bridge-provision','crond','chronyd','avahi-daemon','networkmanager'):

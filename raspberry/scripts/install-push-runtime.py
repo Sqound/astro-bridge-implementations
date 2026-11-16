@@ -34,6 +34,8 @@ def vapid(target):
                     or any(p in ('.', '..') for p in parts) or info.filename.startswith('/')
                     or info.external_attr >> 16 & 0o170000 == 0o120000):
                 raise ValueError('Unexpected wheel member')
+            if len(parts) > 1 and parts[0] == 'py_vapid' and parts[1] == 'tests':
+                continue  # Upstream tests carry a sample private key; never ship them.
             path = target.joinpath(*parts)
             if info.is_dir(): path.mkdir(parents=True, exist_ok=True)
             else:

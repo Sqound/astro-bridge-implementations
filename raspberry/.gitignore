@@ -1,0 +1,45 @@
+__pycache__/
+*.pyc
+.venv/
+.runtime/
+image/cache/
+image/work/
+dist/
+artifacts/*
+!artifacts/.gitkeep
+*.img
+*.img.xz
+*access.txt
+bootstrap.json
+
+# Session files tied to one Mac/card; preserved locally, excluded from Git.
+/docs/DEMARRAGE-SD.md
+/docs/VALIDATION.md
+/scripts/flash-sd-mac.py
+/scripts/verify-sd-mac.py
+
+# Build output and private runtime data.
+build/
+*.egg-info/
+.DS_Store
+.env
+.env.*
+*.nmconnection
+!image/pi5/wifi-bridge-wired.nmconnection
+
+# Owner credentials belong only in the injected private runtime state.
+maker-keys.kek
+maker-keys.bin
+.maker-keys.kek-*
+.maker-keys.bin-*
+
+# Vendor SDKs are temporary CI inputs, never source or release artifacts.
+/vendor-sdk/
+/sdk-downloads/
+ASI_Camera_SDK*
+ASI_linux_mac_SDK*
+sdk_linux_arm*
+sdk_arm32_*
+sdk_Arm64_*
+libASICamera2.so*
+libqhyccd.so*

@@ -1,0 +1,65 @@
+name: Astro Bridge Setup package
+description: Build the unsigned Setup package for Windows (NSIS) or Linux (deb, AppImage) and keep it as an artifact.
+inputs:
+  root:
+    default: .
+  platform:
+    description: windows or linux
+    required: true
+  retention-days:
+    default: '14'
+runs:
+  using: composite
+  steps:
+    - name: Resolve the tree (artifact paths may not contain ..)
+      id: where
+      shell: bash
+      env:
+        ROOT_INPUT: ${{ inputs.root }}
+      run: echo "root=$(python -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$ROOT_INPUT")" >> "$GITHUB_OUTPUT"
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '24'
+    - name: Tauri 2 build dependencies (Linux)
+      if: inputs.platform == 'linux'
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends build-essential curl wget file pkg-config patchelf \
+          libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+    - name: Writing helper
+      shell: bash
+      working-directory: ${{ steps.where.outputs.root }}
+      run: |
+        set -euo pipefail
+        python -m pip install 'pyinstaller==6.16.0' 'pyinstaller-hooks-contrib==2026.9' 'certifi==2026.10.19'
+        python -m PyInstaller --noconfirm --onefile --name astro-bridge-helper --distpath setup/desktop/bin \
+          --workpath build/helper --specpath build --collect-data certifi raspberry/tools/astro-bridge-flasher.py
+    - name: Tests and package
+      shell: bash
+      working-directory: ${{ steps.where.outputs.root }}
+      env:
+        PLATFORM: ${{ inputs.platform }}
+        APPIMAGE_EXTRACT_AND_RUN: '1'
+      run: |
+        set -euo pipefail
+        cargo test --locked --manifest-path setup/catalog/Cargo.toml
+        cargo test --locked --manifest-path setup/desktop/Cargo.toml
+        mkdir -p dist-setup
+        bundle=setup/desktop/target/release/bundle
+        if [ "$PLATFORM" = windows ]; then
+          (cd setup/desktop && npm exec --yes --package @tauri-apps/cli@2.9.6 -- tauri build --bundles nsis)
+          cp "$(find "$bundle/nsis" -name '*-setup.exe' -print -quit)" dist-setup/Astro-Bridge-Setup_windows_x64-setup.exe
+          echo "- Setup Windows x64: **UNSIGNED** (SmartScreen will warn)" >> "$GITHUB_STEP_SUMMARY"
+        else
+          (cd setup/desktop && npm exec --yes --package @tauri-apps/cli@2.9.6 -- tauri build --bundles deb,appimage)
+          cp "$(find "$bundle/deb" -name '*.deb' -print -quit)" dist-setup/Astro-Bridge-Setup_linux_x64.deb
+          cp "$(find "$bundle/appimage" -name '*.AppImage' -print -quit)" dist-setup/Astro-Bridge-Setup_linux_x64.AppImage
+          echo "- Setup Linux x64: not signed (check SHA256SUMS)" >> "$GITHUB_STEP_SUMMARY"
+        fi
+    - uses: actions/upload-artifact@v4
+      with:
+        name: setup-${{ inputs.platform }}-x64
+        path: ${{ steps.where.outputs.root }}/dist-setup/*
+        if-no-files-found: error
+        retention-days: ${{ inputs.retention-days }}

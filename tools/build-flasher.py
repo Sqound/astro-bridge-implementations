@@ -51,7 +51,7 @@ def main():
     output=ROOT/'build/flasher-output';env=dict(os.environ,ASTRO_FLASHER_NOTICES=str(notices))
     command=[sys.executable,'-m','PyInstaller','--noconfirm','--clean','--distpath',str(output),'--workpath',str(ROOT/'build/flasher-work')]
     if system=='Darwin':command += [str(source/'tools/flasher-macos.spec')]
-    else:command += ['--onedir','--name','AstroBridgeFlasher','--specpath',str(ROOT/'build'),'--add-data',str(notices)+os.pathsep+'THIRD-PARTY-NOTICES',str(source/'tools/astro-bridge-flasher.py')]
+    else:command += ['--add-data',str(source/'locales')+os.pathsep+'locales','--onedir','--name','AstroBridgeFlasher','--specpath',str(ROOT/'build'),'--add-data',str(notices)+os.pathsep+'THIRD-PARTY-NOTICES',str(source/'tools/astro-bridge-flasher.py')]
     subprocess.run(command,env=env,check=True)
     bundle=output/('Astro Bridge Flasher.app' if system=='Darwin' else 'AstroBridgeFlasher')
     executable=bundle/('Contents/MacOS/Astro Bridge Flasher' if system=='Darwin' else 'AstroBridgeFlasher'+('.exe' if system=='Windows' else ''))

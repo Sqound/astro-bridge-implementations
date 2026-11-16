@@ -1,0 +1,38 @@
+name: Raspberry Pi 5 image
+description: Build and check the Pi 5 image (needs an ARM64 runner with Docker for the boot splash renderer) from the Core wheel in CORE_WHEEL and the public inputs pinned in raspberry/image/pi5/public-inputs.json.
+inputs:
+  root:
+    default: .
+  retention-days:
+    default: '14'
+runs:
+  using: composite
+  steps:
+    - name: Resolve the tree (artifact paths may not contain ..)
+      id: where
+      shell: bash
+      env:
+        ROOT_INPUT: ${{ inputs.root }}
+      run: echo "root=$(python -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$ROOT_INPUT")" >> "$GITHUB_OUTPUT"
+    - name: Image tools
+      shell: bash
+      run: sudo apt-get update && sudo apt-get install -y --no-install-recommends mtools e2fsprogs xz-utils
+    - name: Build the image (regular file only, no host device)
+      shell: bash
+      working-directory: ${{ steps.where.outputs.root }}
+      run: |
+        set -euo pipefail
+        python raspberry/image/splash/build-renderer.py --output build/splash
+        python raspberry/image/pi5/build-public.py --wheel "$CORE_WHEEL" --core-lock core.lock.json \
+          --project raspberry --owner-tools raspberry/tools --splash-binary build/splash/astro-graphic-splash \
+          --work build/pi5-work --output dist-pi5
+    - name: No SSH key, saved Wi-Fi secret or private key in the image
+      shell: bash
+      working-directory: ${{ steps.where.outputs.root }}
+      run: python tools/verify-image-content.py "dist-pi5/astro-bridge-$(cat VERSION)-alpine-aarch64-pi5.img.xz"
+    - uses: actions/upload-artifact@v4
+      with:
+        name: image-pi-5
+        path: ${{ steps.where.outputs.root }}/dist-pi5/*
+        if-no-files-found: error
+        retention-days: ${{ inputs.retention-days }}

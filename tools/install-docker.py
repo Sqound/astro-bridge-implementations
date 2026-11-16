@@ -17,7 +17,7 @@ import tempfile
 import time
 import urllib.request
 
-VERSION = '1.0.1'
+VERSION = '1.1.0'
 SOURCE_SHA256 = None  # Embedded by the release builder.
 
 
@@ -127,8 +127,8 @@ def main():
     env=dict(os.environ,ASTRO_BRIDGE_PORT=str(args.port),ASTRO_BRIDGE_PROJECT=args.project)
     run(['docker','compose','--env-file',envfile,'-p',args.project,'-f',compose,'up','-d'],env=env)
     print('Compose settings saved in '+str(envfile))
-    if args.mode=='demo':print(f'Open http://127.0.0.1:{args.port}; demo password: demo-telescope-2026')
-    else:print('Open the host IP or hotspot. Initial private access code: sudo cat /etc/wifi-bridge/bootstrap.json')
+    if args.mode=='demo':print(f'Open http://127.0.0.1:{args.port}; demo password: 12345678')
+    else:print('Open the host IP or hotspot. New installations: web and hotspot password 12345678. Existing credentials are preserved.')
 
 
 if __name__=='__main__':

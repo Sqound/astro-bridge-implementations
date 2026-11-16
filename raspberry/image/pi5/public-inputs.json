@@ -1,0 +1,403 @@
+{
+ "format": 1,
+ "alpine": "v3.24",
+ "architecture": "aarch64",
+ "base": {
+  "url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/releases/aarch64/alpine-rpi-3.24.4-aarch64.img.gz",
+  "sha256": "43659fbbfafcd4e1a244adf884a5b104606bbe0a8da13396f2095e1e165707fe",
+  "image_sha256": "baba774960c7d3eecacb3322ac642f784b87a2f1eed94d5568c3421eb5b4549a"
+ },
+ "packages": {
+  "runtime": [
+   {
+    "name": "brotli-libs-1.2.1-r0.apk",
+    "repository": "main",
+    "sha256": "f802b9d5a329c216f02e73607cb8f662c434767e41686367ac0afcf6d0d45d64"
+   },
+   {
+    "name": "c-ares-1.34.9-r0.apk",
+    "repository": "main",
+    "sha256": "1bda7f36597a3f6d616b0c8bd25cd611299bf353ec5ee2ae102e97694885c2f1"
+   },
+   {
+    "name": "dbus-1.16.2-r2.apk",
+    "repository": "main",
+    "sha256": "b98536633c8e7529895760a2062ead47d6f2c88bff077e49846c75559bc0ba27"
+   },
+   {
+    "name": "dbus-daemon-launch-helper-1.16.2-r2.apk",
+    "repository": "main",
+    "sha256": "79cc6c63cce2ad0b04e51835459005c6be6f782f6212a2dfd7aa0c13519155c7"
+   },
+   {
+    "name": "dbus-openrc-1.16.2-r2.apk",
+    "repository": "main",
+    "sha256": "db017cb4774937e2131da530e614c7447195202c6b977d01c16396d362d182c2"
+   },
+   {
+    "name": "dnsmasq-2.92_p2-r0.apk",
+    "repository": "main",
+    "sha256": "47b47cda76dd7dcf360a73f51d1acf83896f820e2709529e2532296b140f9e5f"
+   },
+   {
+    "name": "dnsmasq-common-2.92_p2-r0.apk",
+    "repository": "main",
+    "sha256": "2b61c348e5a3f0813a5347644117c54690f7d4465be300efa044c2aa702bb1d1"
+   },
+   {
+    "name": "dnsmasq-openrc-2.92_p2-r0.apk",
+    "repository": "main",
+    "sha256": "58e217f7d2ea0320167976400868337df93ebc92d6ca7a9a0cf80878b66b04e9"
+   },
+   {
+    "name": "eudev-3.2.14-r6.apk",
+    "repository": "main",
+    "sha256": "4da783e5052b93579dd4e43f55f707cc69cbcf26debba9999ae335fcf3631dd4"
+   },
+   {
+    "name": "eudev-libs-3.2.14-r6.apk",
+    "repository": "main",
+    "sha256": "330022dcf23de371d8df9b08f9bf9c9e98ced062b7352b518ee977dcaf977956"
+   },
+   {
+    "name": "eudev-openrc-3.2.14-r6.apk",
+    "repository": "main",
+    "sha256": "32f88d0a6c95f279ba487d87984216dffd4c1353d8f7df44fad510eed438a1f8"
+   },
+   {
+    "name": "gdbm-1.26-r0.apk",
+    "repository": "main",
+    "sha256": "bad50eb26533e2f58e014fbcd3c1744f2fdb79954af6e3c188ccd059251c7790"
+   },
+   {
+    "name": "glib-2.88.1-r1.apk",
+    "repository": "main",
+    "sha256": "0ae89191a79ea5d5a02515e41f29b62e5e0a0a80fb059804bbbacac2d77cce4e"
+   },
+   {
+    "name": "gmp-6.3.0-r4.apk",
+    "repository": "main",
+    "sha256": "4dab6e86b850fe1b5bc0cf2fac17efa4d7f648bea44f3d9019694cc1e1cb12b7"
+   },
+   {
+    "name": "hostapd-2.11-r4.apk",
+    "repository": "main",
+    "sha256": "b77256740ac873fe386e3efc57415e1338d58479761abd48b9c736ba3f8b7d85"
+   },
+   {
+    "name": "hostapd-openrc-2.11-r4.apk",
+    "repository": "main",
+    "sha256": "b1ff954610f5fc6b918553cd096fbffdb1ca294f8204d7257e67746681e81195"
+   },
+   {
+    "name": "ifupdown-ng-iproute2-0.13.0-r0.apk",
+    "repository": "main",
+    "sha256": "e20602e200a7cfc6ad2a299af368a0c6c08d492d88f6b9bd85dbbd052c54525f"
+   },
+   {
+    "name": "iproute2-7.0.0-r0.apk",
+    "repository": "main",
+    "sha256": "fbcfeece6ecf0d8273e946dcfbafc22c5a86982273f6e7763db06a52a329786b"
+   },
+   {
+    "name": "iproute2-minimal-7.0.0-r0.apk",
+    "repository": "main",
+    "sha256": "5ef23a7fd11df32dae739de6f3faca463711809eeab0391c38ad268636ee0b70"
+   },
+   {
+    "name": "iproute2-ss-7.0.0-r0.apk",
+    "repository": "main",
+    "sha256": "aedabd90cdd393d3c90c3dd71d60d25722ab229e6b6e3e112c820f20c9b778dc"
+   },
+   {
+    "name": "iproute2-tc-7.0.0-r0.apk",
+    "repository": "main",
+    "sha256": "748f12e0d0f13503f113e36fe4f8e287541c5d51d8c9c8fae1e2dcf31a7db903"
+   },
+   {
+    "name": "jansson-2.15.0-r0.apk",
+    "repository": "main",
+    "sha256": "a13822f5ca1772cced4bb7d3d178ec5dee770d8accba5b4816b2ddc413e6f055"
+   },
+   {
+    "name": "kmod-libs-34.2-r1.apk",
+    "repository": "main",
+    "sha256": "b6e330d7d5d207e1ebc4be0b4dec6e0f2f088f33303a6b45718c0119e60f289b"
+   },
+   {
+    "name": "libblkid-2.42.3-r1.apk",
+    "repository": "main",
+    "sha256": "9d0f24976c575c53c12526b6e078edf34c980c153bc8e5f1c1053cbece5b8cfa"
+   },
+   {
+    "name": "libbz2-1.0.8-r6.apk",
+    "repository": "main",
+    "sha256": "28cb76bb6d11d2a55c3061b5fcb2ab84996412a248b2c9fe52bb710d0a2a84e7"
+   },
+   {
+    "name": "libcurl-8.23.0-r0.apk",
+    "repository": "main",
+    "sha256": "64ae89f6e5d318ed5209778232191806ce49644ce9e09540b7d7830a5330d127"
+   },
+   {
+    "name": "libeconf-0.8.3-r0.apk",
+    "repository": "main",
+    "sha256": "cf0899d49ded0a6891e3cdf1b37887f2ecd77293afe1d8f3cb8937763c83f183"
+   },
+   {
+    "name": "libelf-0.195-r0.apk",
+    "repository": "main",
+    "sha256": "1c108314af454a885ac0b053201db57027470c4f2309412c016897e2a2bf5d0e"
+   },
+   {
+    "name": "libelogind-255.24-r0.apk",
+    "repository": "community",
+    "sha256": "11627ee58762791a7fe97eb71019c7cd8a318dee2ef7de7555dbe3319413aca3"
+   },
+   {
+    "name": "libexpat-2.10.0-r0.apk",
+    "repository": "main",
+    "sha256": "99144fe0b1bb9316a3bc30c38707996767806661f4a0456fcf4565ac92e79b0f"
+   },
+   {
+    "name": "libffi-3.5.2-r1.apk",
+    "repository": "main",
+    "sha256": "9a67280b0c7c62db658c2d4d32ed1199903bef859c32dd4245e1a7e35c89ab4b"
+   },
+   {
+    "name": "libgcc-15.2.0-r5.apk",
+    "repository": "main",
+    "sha256": "369aaa6e9d099a737bad6dd3e6c2fe7bb1547ca26d22b94ee0411228f709b403"
+   },
+   {
+    "name": "libintl-1.0-r0.apk",
+    "repository": "main",
+    "sha256": "d106a13e3e68103d3a8217406aae6186289baf352d0f3d10fc21938d2dd8adb1"
+   },
+   {
+    "name": "libmnl-1.0.5-r2.apk",
+    "repository": "main",
+    "sha256": "0ca382c70f78affef3a4a28016aab25ad8c3ccf1bcdad59f3968d4536a7b2478"
+   },
+   {
+    "name": "libmount-2.42.3-r1.apk",
+    "repository": "main",
+    "sha256": "a2a6fc6aab7a59c70ec060f5fb8c950be42d1a017934bf32e5dd6984eaab15cc"
+   },
+   {
+    "name": "libndp-1.9-r1.apk",
+    "repository": "community",
+    "sha256": "b1206760a8ea14cab1f892fc7d75a834c09d8da741c134d24cb5d949c4a7455d"
+   },
+   {
+    "name": "libnftnl-1.3.1-r0.apk",
+    "repository": "main",
+    "sha256": "8b31395671e910c294d7f0e29d3ac3c7efe9d89264db255f39aa9944dd4b6cac"
+   },
+   {
+    "name": "libnm-1.52.2-r0.apk",
+    "repository": "community",
+    "sha256": "41d6d0d2f665cd7c95895a34fd0a97444bffc7797b6e206611d401d30c8c7f6c"
+   },
+   {
+    "name": "libpanelw-6.6_p20260516-r0.apk",
+    "repository": "main",
+    "sha256": "a6912c654c821db4f8a801321709205bd482b0e515b862f2d02045e21b73d97d"
+   },
+   {
+    "name": "libpsl-0.21.5-r3.apk",
+    "repository": "main",
+    "sha256": "b31e91371425d5f80c1db5cba2a849956b65c802add0b49de844b2ca961aa8da"
+   },
+   {
+    "name": "libstdc++-15.2.0-r5.apk",
+    "repository": "main",
+    "sha256": "2302e766d4e4926038ec166ecb85837ee884576115236ddb565e3a5fca4a11d7"
+   },
+   {
+    "name": "libusb-1.0.30-r0.apk",
+    "repository": "main",
+    "sha256": "8238c1dc87e75cf13a961025aad14f574b96cf89b9959f43c54311568c026673"
+   },
+   {
+    "name": "libxtables-1.8.13-r0.apk",
+    "repository": "main",
+    "sha256": "7535f18d9c7229178bc5e3809e5fea171033e33dfa054d88846512e1f25eefa8"
+   },
+   {
+    "name": "mpdecimal-4.0.1-r0.apk",
+    "repository": "main",
+    "sha256": "358959600f99f58deee30ca9089c7f6f0f1bd73cc0021e321a7dbf6f735935c6"
+   },
+   {
+    "name": "networkmanager-1.52.2-r0.apk",
+    "repository": "community",
+    "sha256": "6754f24c0d8c98b9e52fc9c15154de6c6a612d964f9a492e046974848cbc99a4"
+   },
+   {
+    "name": "networkmanager-cli-1.52.2-r0.apk",
+    "repository": "community",
+    "sha256": "23829f996e334648d5a0ce58de06c995c6ad9742843ac58131c6a6d768e42873"
+   },
+   {
+    "name": "networkmanager-openrc-1.52.2-r0.apk",
+    "repository": "community",
+    "sha256": "5d282a31337b06ce58391ad25171f43739fb72ee468e7f79cc61f222186022ad"
+   },
+   {
+    "name": "networkmanager-wifi-1.52.2-r0.apk",
+    "repository": "community",
+    "sha256": "567a99be16ce9b7eb66a78d35f3bb889febbd30093f5eb20ad121bbb4e426a8a"
+   },
+   {
+    "name": "nftables-1.1.6-r1.apk",
+    "repository": "main",
+    "sha256": "e350dc0ae7667486f925a6719add6df562055799baf0e402077ef2b11839ac9e"
+   },
+   {
+    "name": "nftables-openrc-1.1.6-r1.apk",
+    "repository": "main",
+    "sha256": "f5e73fc091db715ade23049944544962e48f8cad539803c119111a72bb03b04f"
+   },
+   {
+    "name": "nghttp2-libs-1.70.0-r0.apk",
+    "repository": "main",
+    "sha256": "7ef451f4dcdc065aa872c2f3c78b9d9bb4348caa5bcc70dee0c9e1fcf8e4c1fd"
+   },
+   {
+    "name": "nspr-4.38.2-r0.apk",
+    "repository": "main",
+    "sha256": "e98abeff25fcbf006ed9081bed87ce2a60c96ea75df7672b3b69350bec840219"
+   },
+   {
+    "name": "nss-3.124-r0.apk",
+    "repository": "main",
+    "sha256": "9ba9909e523e3add8f148b5d46654d35702fefc9ee20b4082ca96dfbe5256b76"
+   },
+   {
+    "name": "python3-3.14.10-r1.apk",
+    "repository": "main",
+    "sha256": "980b5108e756f1aae298c041ef6bb229b655b7a5393b8c001f6bac8a03825429"
+   },
+   {
+    "name": "python3-pycache-pyc0-3.14.10-r1.apk",
+    "repository": "main",
+    "sha256": "7efec44a37bcb3c958b07f523de214da3ae0e8fb9c4e45cbc2709d7fae15a4a1"
+   },
+   {
+    "name": "readline-8.3.3-r1.apk",
+    "repository": "main",
+    "sha256": "9f0ae0923c02b0d6aba62e9173542b65396ba3f0efefcbf087ea32f1120e7b34"
+   },
+   {
+    "name": "sqlite-libs-3.53.4-r0.apk",
+    "repository": "main",
+    "sha256": "b39d8d73c1208838a436f2d481ba605b52a095f8d6ff781556eafc81cd1a13e9"
+   },
+   {
+    "name": "udev-init-scripts-35-r1.apk",
+    "repository": "main",
+    "sha256": "98775c9b594072240bd99dc472c99e88912225e887006ba6b6f803e4d1298040"
+   },
+   {
+    "name": "udev-init-scripts-openrc-35-r1.apk",
+    "repository": "main",
+    "sha256": "19ee6c3f65d7f9cf5ecd435b682a9df0770fc21ec309bb98f290f9e9db77d24e"
+   },
+   {
+    "name": "usb-modeswitch-2.6.1-r5.apk",
+    "repository": "main",
+    "sha256": "cd3f51d93848b40423d4a921e46e83c8029bc6c52dc35ad9015d14aa43f41201"
+   },
+   {
+    "name": "xz-libs-5.8.4-r0.apk",
+    "repository": "main",
+    "sha256": "9be375832e747afe14f98e400e8b55d8f6fde25e41663090c81600628daab093"
+   },
+   {
+    "name": "zstd-libs-1.5.7-r2.apk",
+    "repository": "main",
+    "sha256": "2bb5136c89f5b0bbe1554c8915a3b520d5aa63ae2a51d4d821eb81698db5a818"
+   },
+   {
+    "name": "avahi-0.9_rc4-r0.apk",
+    "repository": "main",
+    "sha256": "804263c2a02a86c76a6d531051b33796fc1aec67c99e6c238e8535fefceaae51"
+   },
+   {
+    "name": "avahi-libs-0.9_rc4-r0.apk",
+    "repository": "main",
+    "sha256": "bf6c5092d9a90b2e5c22f007d888e8e786de73dcb9a787361d7a04afb8f8ecf6"
+   },
+   {
+    "name": "avahi-openrc-0.9_rc4-r0.apk",
+    "repository": "main",
+    "sha256": "8a4fada6412db8636ad2de4d6eaf3a92a70919e3d7c2d75779a12097187ec276"
+   },
+   {
+    "name": "libdaemon-0.14-r6.apk",
+    "repository": "main",
+    "sha256": "82238e6a4cbaa16db0603537ef918e37beca17cc87537f3c85632b5ea47657ce"
+   },
+   {
+    "name": "libevent-2.1.13-r0.apk",
+    "repository": "main",
+    "sha256": "7618eac5177ec3779fc2ed4ad4d533f5dfed2fc0aecf6c6274c9bf795f0e9991"
+   },
+   {
+    "name": "libidn2-2.3.8-r0.apk",
+    "repository": "main",
+    "sha256": "d02ffda4510652f89c5fb89cd2e7ff721afb0c74e7d75476ad60bebe7ac0ae20"
+   },
+   {
+    "name": "libunistring-1.4.2-r0.apk",
+    "repository": "main",
+    "sha256": "58abfcbce2459071c505771a572a79953d6043d72b643ed0d5285ca39cdaf85c"
+   },
+   {
+    "name": "pcre2-10.49-r0.apk",
+    "repository": "main",
+    "sha256": "03efd0b29f7f38deb10a9ccb54f56e19683eb7ac27eb1f347e6dbd2e59ea000d"
+   }
+  ],
+  "display": [
+   {
+    "name": "libpng-1.6.59-r0.apk",
+    "repository": "main",
+    "sha256": "bccd127f8c42bc5c21c018b6b1dc977128f3bad64c3412e541c09e96e8b227a4"
+   },
+   {
+    "name": "libqrencode-4.1.1-r3.apk",
+    "repository": "community",
+    "sha256": "455a7d471300d581613a7ddc77778779fc61f3a55053c733cad741aafa75b884"
+   },
+   {
+    "name": "libqrencode-tools-4.1.1-r3.apk",
+    "repository": "community",
+    "sha256": "42e12739c1e0a1bbdfe809ab1cf340984f566d6fbca6b322a1196a7c696adeb8"
+   }
+  ],
+  "camera": [
+   {
+    "name": "gcompat-1.1.0-r4.apk",
+    "repository": "main",
+    "sha256": "8e6b58c16e3cceaf714d71d3906f2b6b42fa299027519c5f2ec46960ff2776e2"
+   },
+   {
+    "name": "libucontext-1.5.1-r0.apk",
+    "repository": "main",
+    "sha256": "bb8ff2783ebd1488baebd403b048ea62b8d64f166ea402584f01f1b1a6c89d4f"
+   },
+   {
+    "name": "musl-obstack-1.2.3-r2.apk",
+    "repository": "main",
+    "sha256": "08ac3018b48849dce6737f2eca8d925fb82c6c7cd416e70f8f5975ac97e725cc"
+   }
+  ]
+ },
+ "splash_toolchain": {
+  "gcc": "15.2.0-r5",
+  "musl-dev": "1.2.6-r3",
+  "linux-headers": "7.0.0-r1"
+ }
+}

@@ -20,5 +20,5 @@ exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name='Astro Bridge Flasher'
 coll = COLLECT(exe, a.binaries, a.datas, strip=False, upx=True, upx_exclude=[],
                name='Astro Bridge Flasher')
 app = BUNDLE(coll, name='Astro Bridge Flasher.app', icon=None,
-             bundle_identifier='space.planastro.astrobridge.flasher',
+             bundle_identifier='io.github.sqound.astrobridge.flasher',
              version=app_version, info_plist={'CFBundleVersion': app_version})

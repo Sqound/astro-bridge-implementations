@@ -23,7 +23,7 @@ COPY build-conntrack.py /tmp/build-conntrack.py
 RUN python3 /tmp/build-conntrack.py --prefix /opt/conntrack
 
 FROM common AS linux
-RUN apt-get update && apt-get install -y --no-install-recommends network-manager systemd dbus hostapd dnsmasq-base nftables conntrack iw iproute2 rfkill openssl chrony python3-venv && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends network-manager wpasupplicant busybox iputils-ping systemd dbus hostapd dnsmasq-base nftables conntrack iw iproute2 rfkill openssl chrony python3-venv && rm -rf /var/lib/apt/lists/*
 # Full runtime adds Web Push libraries in an isolated venv, never the host Python.
 RUN python3 -m venv /opt/push && /opt/push/bin/pip install --no-cache-dir py-vapid==1.9.6 http-ece==1.2.1 'cryptography>=46,<51'
 COPY --from=conntrack-build /opt/conntrack /opt/conntrack

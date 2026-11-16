@@ -4,6 +4,10 @@ import hashlib
 import io
 import importlib.util
 import os
+import shutil
+import socket
+import time
+from urllib.request import urlopen
 import subprocess
 import sys
 import json
@@ -159,18 +163,146 @@ class UpdateTests(unittest.TestCase):
             destination=self.root/platform;ota.unpack((output/asset).read_bytes(),manifest,destination,platform=platform)
             self.assertTrue((destination/'wifi_bridge/static/events.js').is_file())
             self.assertTrue((destination/'wifi_bridge/static/i18n.js').is_file())
+            for module in ('indi.py', 'indi_platform.py', 'indi_worker.py'):
+                self.assertTrue((destination/'wifi_bridge/cameras'/module).is_file())
+            descriptor = json.loads((destination/'wifi_bridge/cameras/tables/zwo_asi.json').read_text())
+            self.assertEqual(descriptor['indi_driver'], 'indi_asi_ccd')
+            self.assertFalse(any(p.name in ('bwrap','indiserver','indi_asi_ccd') for p in destination.rglob('*')))
             namespace={};exec((destination/'wifi_bridge/build.py').read_text(),namespace)
             loaded=namespace['BUILD_ID'];self.assertEqual(loaded,manifest['build_id'])
             # This value is imported at process start, not reread from mutable disk.
             (destination/'wifi_bridge/build.py').write_text('BUILD_ID="changed"')
             self.assertEqual(loaded,manifest['build_id'])
-            self.assertEqual(manifest['minimum_updater'],2 if 'alpine' in platform else 1)
-            if 'raspios' in platform:
-                with tarfile.open(output/asset) as tar:
-                    for member in tar:
-                        parts=Path(member.name).parts
-                        self.assertTrue(member.isfile())
-                        self.assertTrue(len(parts)==2 and member.name.endswith('.py') or len(parts)==3 and parts[1]=='static')
+            self.assertEqual((manifest['format'], manifest['minimum_updater']), (3, 3))
+            with patch.object(ota, 'UPDATER_VERSION', 2), self.assertRaises(ValueError):
+                ota.unpack((output/asset).read_bytes(), manifest, self.root/'legacy', platform=platform)
+            expected = {p.relative_to(source) for p in (source/'wifi_bridge').rglob('*')
+                        if p.is_file() and '__pycache__' not in p.parts}
+            with tarfile.open(output/asset) as tar:
+                self.assertEqual({Path(member.name) for member in tar if member.isfile()}, expected)
+            # Isolated interpreter: imports/registry and fresh process entry point
+            # must be resolved solely from the unpacked application each time.
+            command = ('import sys; sys.path.insert(0, sys.argv[1]); '
+                       'import importlib, pkgutil, wifi_bridge; '
+                       '[importlib.import_module(m.name) for m in pkgutil.walk_packages(wifi_bridge.__path__, "wifi_bridge.")]; '
+                       'from wifi_bridge.cameras.registry import load_registry; '
+                       'assert {"simulator", "uvc", "zwo_asi"} <= {v["id"] for v in load_registry().descriptors()}')
+            subprocess.run([sys.executable, '-I', '-B', '-c', command, str(destination)],
+                           cwd=self.root, check=True, timeout=30)
+
+    def test_packaged_demo_restarts_with_same_health_identity(self):
+        source = Path(__file__).resolve().parents[1]
+        spec = importlib.util.spec_from_file_location('package_release', source/'tools/package-release.py')
+        builder = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(builder)
+        output = self.root/'dist'
+        builder.package(source, output)
+        name, asset = ota.asset_names('linux-alpine-armhf', __version__)
+        manifest = json.loads((output/name).read_text())
+        stage = self.root/'unpacked'
+        ota.unpack((output/asset).read_bytes(), manifest, stage, platform='linux-alpine-armhf')
+        launch = ('import runpy, sys; sys.path.insert(0, sys.argv.pop(1)); '
+                  'runpy.run_module("wifi_bridge", run_name="__main__")')
+        for _ in range(2):
+            with socket.socket() as listener:
+                listener.bind(('127.0.0.1', 0))
+                port = listener.getsockname()[1]
+            command = [sys.executable, '-I', '-B', '-c', launch, str(stage), '--demo',
+                       '--port', str(port), '--state-dir', str(self.root/'demo-state')]
+            with subprocess.Popen(command, cwd=self.root, stdout=subprocess.DEVNULL,
+                                  stderr=subprocess.DEVNULL) as process:
+                try:
+                    deadline = time.monotonic() + 15
+                    while process.poll() is None and time.monotonic() < deadline:
+                        try:
+                            with urlopen(f'http://127.0.0.1:{port}/api/update-health', timeout=1) as response:
+                                health = json.load(response)
+                            break
+                        except OSError:
+                            time.sleep(.1)
+                    else:
+                        self.fail('Packaged demo did not become reachable')
+                    self.assertEqual((health['version'], health['build_id']), (__version__, manifest['build_id']))
+                finally:
+                    process.terminate()
+                    try: process.wait(15)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        self.fail('Packaged demo did not shut down')
+
+    def test_format_three_supports_additive_modules_and_data_in_reviewed_directories(self):
+        for name in ('cameras/extra_driver.py', 'cameras/tables/extra_driver.json',
+                     'telemetry/adapters/extra_observer.py', 'maker_keys/extra_protocol.py'):
+            self.assertTrue(ota.allowed_file(name, True))
+            self.assertFalse(ota.allowed_file(name, False))
+        for name in ('cameras/vendor.so', 'telemetry/.probe.py', 'cameras/tables/setup.py',
+                     'telemetry/new_package/__init__.py', 'maker_keys/store.json'):
+            self.assertFalse(ota.allowed_file(name, True))
+
+    def test_additive_camera_descriptor_must_match_reviewed_source_and_round_trip(self):
+        source = Path(__file__).resolve().parents[1]
+        spec = importlib.util.spec_from_file_location('package_release', source/'tools/package-release.py')
+        builder = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(builder)
+        root = self.root/'source'
+        for folder in ('wifi_bridge', 'cameras', 'plugins'):
+            shutil.copytree(source/folder, root/folder, ignore=shutil.ignore_patterns('__pycache__'))
+        table = dict(json.loads((root/'cameras/simulator.json').read_text()), id='bench_extension')
+        canonical = json.dumps(table, indent=2) + '\n'
+        (root/'cameras/bench_extension.json').write_text(canonical)
+        (root/'wifi_bridge/cameras/bench_extension.py').write_text('AVAILABLE = True\n')
+        with self.assertRaisesRegex(ValueError, 'Camera tables are stale'):
+            builder.package(root)
+        (root/'wifi_bridge/cameras/tables/bench_extension.json').write_text(canonical)
+        builder.package(root)
+        name, asset = ota.asset_names('linux-alpine-armhf', __version__)
+        manifest = json.loads((root/'dist'/name).read_text())
+        stage = self.root/'extra'
+        ota.unpack((root/'dist'/asset).read_bytes(), manifest, stage, platform=manifest['platform'])
+        self.assertEqual((stage/'wifi_bridge/cameras/tables/bench_extension.json').read_text(), canonical)
+        self.assertTrue((stage/'wifi_bridge/cameras/bench_extension.py').is_file())
+
+    def test_nested_files_cannot_escape_scope_or_legacy_manifest(self):
+        for path, content, fmt in (
+                ('telemetry/../../escape.py', 'x', 3), ('telemetry/./api.py', 'x', 3),
+                ('telemetry/api.py', None, 3), ('telemetry/unreviewed/injected.py', 'x', 3),
+                ('cameras/tables/.config.json', '{}', 3), ('cameras/tables/config.json', '{}', 3), ('maker_keys/maker-keys.bin', 'x', 3),
+                ('cameras/uvc.py', 'x' * (4 * 1024 * 1024 + 1), 3),
+                ('maker_keys/api.py', '-----' + 'BEGIN ' + 'PRIVATE' + ' KEY-----', 3),
+                ('telemetry/api.py', 'x', 2)):
+            with self.subTest(path=path, fmt=fmt):
+                files = {'wifi_bridge/' + name: json.dumps({'id': Path(name).stem}) if name.endswith('.json') else ''
+                         for name in ota.NESTED_FILES}
+                files.update({'wifi_bridge/__init__.py': '__version__="1.2.3"',
+                              'wifi_bridge/__main__.py': '', 'wifi_bridge/static/index.html': '',
+                              'wifi_bridge/static/i18n.js': '', 'wifi_bridge/static/events.js': '',
+                              'wifi_bridge/build.py': '', 'wifi_bridge/'+path: content})
+                data = archive(files)
+                manifest = dict(payload()[1], format=fmt, minimum_updater=fmt,
+                                sha256=hashlib.sha256(data).hexdigest())
+                with self.assertRaises(ValueError):
+                    ota.unpack(data, manifest, self.root/'bad', 'linux-raspios-armhf')
+                self.assertFalse((self.root/'bad').exists())
+
+    def test_completed_nested_candidate_rolls_back_on_failed_health(self):
+        source = Path(__file__).resolve().parents[1]
+        spec = importlib.util.spec_from_file_location('package_release', source/'tools/package-release.py')
+        builder = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(builder)
+        output = self.root/'dist'
+        builder.package(source, output)
+        name, asset = ota.asset_names('linux-alpine-armhf', __version__)
+        manifest = json.loads((output/name).read_text())
+        (self.app/'__init__.py').write_text('__version__="0.0.1"')
+        (self.app/'telemetry').mkdir()
+        (self.app/'telemetry/old.py').write_text('OLD = True')
+        previous = ota.tree_identity(self.app)
+        with patch.object(ota, 'PLATFORM', 'linux-alpine-armhf'), patch.object(ota, 'service'), \
+                patch.object(ota.subprocess, 'run'), patch.object(ota, 'health', return_value=SAFE), \
+                patch.object(ota.time, 'monotonic', side_effect=[0, 999]), self.assertRaises(ota.UpdateRolledBack):
+            ota.install({'version': __version__}, (manifest, (output/asset).read_bytes()))
+        self.assertEqual(previous, ota.tree_identity(self.app))
+        self.assertEqual((self.state.parent/'config.json').read_text(), '{"retained":true}')
 
     def test_interrupted_phases_and_each_directory_rename_are_recoverable(self):
         for phase,switched in [('prepared',0),('applying',0),('applying',1),('applying',2),('verifying',2)]:
@@ -303,3 +435,38 @@ class UpdateTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class LiveUpdateTargetTests(unittest.TestCase):
+    def test_live_targets_require_v3_and_never_match_armhf(self):
+        for target in ota.LIVE_PLATFORMS:
+            manifest,asset=ota.asset_names(target,'1.2.3')
+            self.assertIn(target,manifest);self.assertIn(target,asset)
+            data,record=payload()
+            for old_format in (1,2):
+                record.update(platform=target,format=old_format,minimum_updater=old_format)
+                with tempfile.TemporaryDirectory() as directory,self.assertRaises(ValueError):
+                    ota.unpack(data,record,Path(directory),platform=target)
+            with patch.object(ota,'PLATFORM',target),patch.object(ota,'fetch',return_value=json.dumps({
+                    'id':1,'tag_name':'v1.2.3','assets':[{'name':'ota-manifest-linux-alpine-armhf.json',
+                    'browser_download_url':'https://example.invalid/armhf'}]}).encode()):
+                with self.assertRaises(ValueError):ota.release('1.0.0')
+
+    def test_os_declaration_is_bounded_private_regular_and_arch_specific(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);path=root/'etc/wifi-bridge/ota-platform';path.parent.mkdir(parents=True)
+            self.assertIsNone(ota.live_platform(root,'x86_64'))
+            path.write_text('linux-alpine-x86_64\n');path.chmod(0o644)
+            # The fixture's user owns the file; spoof only stat uid for this read policy test.
+            real_fstat=ota.os.fstat
+            def owned(fd):
+                result=list(real_fstat(fd));result[4]=0;return os.stat_result(result)
+            with patch.object(ota.os,'fstat',side_effect=owned):
+                self.assertEqual(ota.live_platform(root,'x86_64'),'linux-alpine-x86_64')
+                with self.assertRaises(ValueError):ota.live_platform(root,'aarch64')
+                path.chmod(0o666)
+                with self.assertRaises(ValueError):ota.live_platform(root,'x86_64')
+                path.chmod(0o644);path.write_text('x'*65)
+                with self.assertRaises(ValueError):ota.live_platform(root,'x86_64')
+            path.unlink();path.symlink_to(root/'missing')
+            with self.assertRaises(OSError):ota.live_platform(root,'x86_64')

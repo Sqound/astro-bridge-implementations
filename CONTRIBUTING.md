@@ -13,8 +13,14 @@ Application/UI/protocol changes and declarative device plugins belong in [Core](
 
 ```sh
 python3 tools/core-artifact.py fetch
-python3 tools/test-platforms.py --wheel build/core/astro_bridge_core-1.0.1-py3-none-any.whl
-python3 tools/verify-staging.py --wheel build/core/astro_bridge_core-1.0.1-py3-none-any.whl
+python3 tools/test-platforms.py --wheel build/core/astro_bridge_core-1.1.0-py3-none-any.whl
+python3 tools/verify-staging.py --wheel build/core/astro_bridge_core-1.1.0-py3-none-any.whl
 ```
+
+## Astro Bridge Setup
+
+Setup changes live in `setup/`. Keep the interface strings in all ten catalogs of `setup/ui/locales.js`, run the Rust and browser tests listed in [setup/README.md](setup/README.md), and never test writing on a disk you have not explicitly chosen to erase. Tests must use fixtures and mocked disks.
+
+Add a line under the unreleased version in [CHANGELOG.md](CHANGELOG.md) for user-visible changes. Report security problems privately as described in [SECURITY.md](SECURITY.md).
 
 Contributions to the original project are made under the [MIT License](LICENSE).

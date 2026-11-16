@@ -1,0 +1,22 @@
+#!/sbin/openrc-run
+name="Astro Bridge private diagnostic SSH"
+command="/usr/sbin/sshd"
+command_args="-f /etc/ssh/astro-diagnostic-sshd_config"
+pidfile="/run/astro-diagnostic-sshd.pid"
+depend() { need astro-data astro-runtime-packages; after entropy; }
+start_pre() {
+    local dir=/var/lib/wifi-bridge/diagnostic-ssh
+    [ -d /var/lib/wifi-bridge ] && [ ! -L /var/lib/wifi-bridge ] || return 1
+    [ ! -L "$dir" ] || return 1
+    mkdir -p "$dir" || return 1
+    chmod 700 "$dir" || return 1
+    [ ! -L "$dir/ssh_host_ed25519_key" ] && [ ! -L "$dir/ssh_host_ed25519_key.pub" ] || return 1
+    if [ ! -e "$dir/ssh_host_ed25519_key" ]; then
+        [ ! -e "$dir/ssh_host_ed25519_key.pub" ] || return 1
+        umask 077
+        ssh-keygen -q -t ed25519 -N '' -f "$dir/ssh_host_ed25519_key" || return 1
+    fi
+    [ -f "$dir/ssh_host_ed25519_key" ] || return 1
+    chmod 600 "$dir/ssh_host_ed25519_key" || return 1
+    /usr/sbin/sshd -t -f /etc/ssh/astro-diagnostic-sshd_config || return 1
+}

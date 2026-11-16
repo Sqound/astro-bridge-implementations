@@ -31,3 +31,33 @@ class LinuxTLS(unittest.TestCase):
             # Shared helper still refuses permissive secret storage.
             state.chmod(0o755)
             with self.assertRaises(ValueError):helper.mounted()
+
+
+class LinuxBootstrap(unittest.TestCase):
+    def installer(self):
+        spec=importlib.util.spec_from_file_location('host_install',ROOT/'linux/host-install.py')
+        module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+        return module
+
+    def test_fresh_install_has_documented_web_and_hotspot_password(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)/'bootstrap.json'
+            self.assertTrue(self.installer().initialize_bootstrap(path))
+            self.assertEqual(json.loads(path.read_text()),{'password':'12345678'})
+            self.assertEqual(path.stat().st_mode & 0o777,0o600)
+
+    def test_rerun_preserves_existing_password_and_permissions(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)/'bootstrap.json';path.write_text('{"password":"owner-custom-code","retained":true}');path.chmod(0o600)
+            original=path.read_bytes()
+            self.assertFalse(self.installer().initialize_bootstrap(path))
+            self.assertEqual(path.read_bytes(),original)
+            self.assertEqual(path.stat().st_mode & 0o777,0o600)
+
+    def test_existing_symlink_is_never_replaced_or_followed_for_writing(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);target=root/'owner.json';target.write_text('{"password":"owner-custom-code"}')
+            path=root/'bootstrap.json';path.symlink_to(target)
+            self.assertFalse(self.installer().initialize_bootstrap(path))
+            self.assertTrue(path.is_symlink())
+            self.assertEqual(json.loads(target.read_text())['password'],'owner-custom-code')

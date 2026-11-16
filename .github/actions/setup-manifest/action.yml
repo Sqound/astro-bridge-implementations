@@ -1,0 +1,37 @@
+name: Setup manifest
+description: Write astro-bridge-setup-manifest.json from the two image artifacts and the Docker installer.
+inputs:
+  root:
+    default: .
+  retention-days:
+    default: '14'
+runs:
+  using: composite
+  steps:
+    - name: Resolve the tree (artifact paths may not contain ..)
+      id: where
+      shell: bash
+      env:
+        ROOT_INPUT: ${{ inputs.root }}
+      run: echo "root=$(python -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$ROOT_INPUT")" >> "$GITHUB_OUTPUT"
+    - uses: actions/download-artifact@v4
+      with:
+        pattern: image-*
+        path: ${{ steps.where.outputs.root }}/dist-images
+        merge-multiple: true
+    - name: Manifest
+      shell: bash
+      working-directory: ${{ steps.where.outputs.root }}
+      run: |
+        set -euo pipefail
+        version=$(cat VERSION)
+        python tools/setup-manifest.py --output dist-images/astro-bridge-setup-manifest.json \
+          "pi-zero-w=dist-images/astro-bridge-$version-alpine-armhf-standard.img.xz" \
+          "pi-5=dist-images/astro-bridge-$version-alpine-aarch64-pi5.img.xz" docker=dist-images/install-docker.sh
+        cat dist-images/astro-bridge-setup-manifest.json
+    - uses: actions/upload-artifact@v4
+      with:
+        name: astro-bridge-setup-manifest
+        path: ${{ steps.where.outputs.root }}/dist-images/astro-bridge-setup-manifest.json
+        if-no-files-found: error
+        retention-days: ${{ inputs.retention-days }}

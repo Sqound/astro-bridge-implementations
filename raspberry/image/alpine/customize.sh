@@ -57,8 +57,7 @@ apk add --no-cache alpine-base openrc linux-rpi raspberrypi-bootloader mkinitfs 
 '
 install -d -m 755 "$ROOT/opt/wifi-bridge/wifi_bridge/static" "$ROOT/etc/wifi-bridge" "$ROOT/etc/NetworkManager/conf.d" "$ROOT/etc/NetworkManager/system-connections" "$ROOT/etc/avahi/services" "$ROOT/etc/sudoers.d"
 install -d -m 700 "$ROOT/var/lib/wifi-bridge"
-cp wifi_bridge/*.py "$ROOT/opt/wifi-bridge/wifi_bridge/"
-cp wifi_bridge/static/* "$ROOT/opt/wifi-bridge/wifi_bridge/static/"
+python3 scripts/copy-app.py wifi_bridge "$ROOT/opt/wifi-bridge/wifi_bridge"
 install -m 755 image/alpine/openrc/* "$ROOT/etc/init.d/"
 install -m 644 systemd/wifi-bridge-http.service "$ROOT/etc/avahi/services/"
 echo openrc > "$ROOT/etc/wifi-bridge/init-system"

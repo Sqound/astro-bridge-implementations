@@ -26,8 +26,7 @@ if [ -z "$TARGET_ROOT" ]; then
   apt-get install -y --no-install-recommends python3 network-manager hostapd dnsmasq-base avahi-daemon nftables conntrack iw rfkill openssl
 fi
 install -d -m 755 "$TARGET_ROOT/opt/wifi-bridge/wifi_bridge" "$TARGET_ROOT/opt/wifi-bridge/wifi_bridge/static"
-install -m 644 "$PROJECT_DIR"/wifi_bridge/*.py "$TARGET_ROOT/opt/wifi-bridge/wifi_bridge/"
-install -m 644 "$PROJECT_DIR"/wifi_bridge/static/* "$TARGET_ROOT/opt/wifi-bridge/wifi_bridge/static/"
+python3 "$PROJECT_DIR/scripts/copy-app.py" "$PROJECT_DIR/wifi_bridge" "$TARGET_ROOT/opt/wifi-bridge/wifi_bridge"
 install -d -m 700 "$TARGET_ROOT/etc/wifi-bridge" "$TARGET_ROOT/var/lib/wifi-bridge"
 install -d -m 755 "$TARGET_ROOT/etc/NetworkManager/system-connections" "$TARGET_ROOT/etc/avahi/services" "$TARGET_ROOT/etc/systemd/system" "$TARGET_ROOT/etc/sysctl.d"
 install -m 644 "$PROJECT_DIR/systemd/wifi-bridge.service" "$PROJECT_DIR/systemd/wifi-bridge-ap.service" "$PROJECT_DIR/systemd/wifi-bridge-dhcp.service" "$PROJECT_DIR/systemd/wifi-bridge-password.service" "$TARGET_ROOT/etc/systemd/system/"
@@ -44,7 +43,7 @@ if [ -z "$TARGET_ROOT" ] && ! id bridge >/dev/null 2>&1; then
   python3 "$PROJECT_DIR/scripts/create_console_user.py"
 fi
 install -d -m 755 "$TARGET_ROOT/usr/local/lib/astro-bridge"
-printf '%s\n' 2 > "$TARGET_ROOT/etc/wifi-bridge/updater-version"
+printf '%s\n' 3 > "$TARGET_ROOT/etc/wifi-bridge/updater-version"
 install -m 644 "$PROJECT_DIR/scripts/password.py" "$TARGET_ROOT/usr/local/lib/astro-bridge/password.py"
 install -m 644 "$PROJECT_DIR/scripts/ota.py" "$TARGET_ROOT/usr/local/lib/astro-bridge/ota.py"
 install -m 644 "$PROJECT_DIR"/systemd/astro-bridge-update-* "$TARGET_ROOT/etc/systemd/system/"

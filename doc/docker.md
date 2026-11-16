@@ -11,7 +11,7 @@ Docker runs the Astro Bridge application and its container dependencies on an ex
 The installer prints a plan by default. On a dedicated Debian/Ubuntu Linux host:
 
 ```sh
-curl -fLO https://github.com/Sqound/astro-bridge-implementations/releases/download/v1.0.1/install-docker.sh
+curl -fLO https://github.com/Sqound/astro-bridge-implementations/releases/download/v1.1.0/install-docker.sh
 sh install-docker.sh --mode linux
 # Review the plan, then install dependencies and deploy:
 sudo sh install-docker.sh --mode linux --apply
@@ -24,7 +24,7 @@ For the portable demo, use `--mode demo`. macOS/Windows use Docker Desktop; the 
 Download the Python installer from the same release first (Python 3.11 or later is required on macOS/Windows):
 
 ```sh
-curl -fLO https://github.com/Sqound/astro-bridge-implementations/releases/download/v1.0.1/install-docker.py
+curl -fLO https://github.com/Sqound/astro-bridge-implementations/releases/download/v1.1.0/install-docker.py
 python3 install-docker.py --mode demo
 python3 install-docker.py --mode demo --apply
 ```
@@ -35,11 +35,11 @@ The release's `install-docker.py` embeds the deployment source checksum. Offline
 
 ```sh
 python3 tools/core-artifact.py fetch
-python3 docker/build.py --wheel build/core/astro_bridge_core-1.0.1-py3-none-any.whl --target demo
+python3 docker/build.py --wheel build/core/astro_bridge_core-1.1.0-py3-none-any.whl --target demo
 docker compose -f docker/compose.demo.yaml up -d
 ```
 
-Open **http://127.0.0.1:8787** and use **`demo-telescope-2026`**. This mode works with Docker Engine or Docker Desktop and does not control radios.
+Open **http://127.0.0.1:8787** and use **`12345678`**. This mode works with Docker Engine or Docker Desktop and does not control radios.
 
 ![Astro Bridge demo dashboard](images/dashboard-dark.png)
 
@@ -57,11 +57,11 @@ Use a **dedicated rootful Linux Docker Engine host** with systemd, NetworkManage
 # Inspect the host changes first.
 sudo python3 linux/host-install.py --mode docker
 sudo python3 linux/host-install.py --mode docker --apply
-python3 docker/build.py --wheel build/core/astro_bridge_core-1.0.1-py3-none-any.whl --target linux
+python3 docker/build.py --wheel build/core/astro_bridge_core-1.1.0-py3-none-any.whl --target linux
 docker compose -f docker/compose.linux.yaml up -d
 ```
 
-Read the initial random access code locally with `sudo cat /etc/wifi-bridge/bootstrap.json`. Open the host's configured management IP, localhost, or **192.168.77.1** after joining the hotspot.
+New installations use **`12345678`** for both web access and the hotspot, matching the Raspberry image and native Linux installation. Change credentials in Settings after setup. Existing installations keep their saved passwords; the installer never overwrites a bootstrap file. Open the host's configured management IP, localhost, or **192.168.77.1** after joining the hotspot.
 
 ## Host access contract
 

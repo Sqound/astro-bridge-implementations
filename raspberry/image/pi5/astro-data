@@ -1,0 +1,24 @@
+#!/sbin/openrc-run
+name="Astro Bridge data mount"
+depend() { need localmount; after modloop; before astro-runtime-packages wifi-bridge; }
+start() {
+    [ -b /dev/mmcblk0p2 ] || return 1
+    local label_record
+    label_record=$(busybox blkid /dev/mmcblk0p2) || return 1
+    case " $label_record " in *' LABEL="ASTRO_DATA" '*) :;; *) return 1;; esac
+    if ! grep -qw ext4 /proc/filesystems; then
+        modprobe ext4 || return 1
+    fi
+    grep -qw ext4 /proc/filesystems || return 1
+    mkdir -p /media/mmcblk0p2 /var/lib/wifi-bridge || return 1
+    if ! awk '$2 == "/media/mmcblk0p2" {found=1} END {exit !found}' /proc/mounts; then
+        mount -t ext4 -o rw,noatime,nosuid,nodev /dev/mmcblk0p2 /media/mmcblk0p2 || return 1
+    fi
+    awk '$1 == "/dev/mmcblk0p2" && $2 == "/media/mmcblk0p2" && $3 == "ext4" && $4 ~ /(^|,)rw(,|$)/ && $4 ~ /(^|,)nosuid(,|$)/ && $4 ~ /(^|,)nodev(,|$)/ {ok=1} END {exit !ok}' /proc/mounts || return 1
+    [ -d /media/mmcblk0p2/state ] && [ ! -L /media/mmcblk0p2/state ] || return 1
+    if ! awk '$2 == "/var/lib/wifi-bridge" {found=1} END {exit !found}' /proc/mounts; then
+        mount --bind /media/mmcblk0p2/state /var/lib/wifi-bridge || return 1
+    fi
+    awk '$4 == "/state" && $5 == "/var/lib/wifi-bridge" {ok=1} END {exit !ok}' /proc/self/mountinfo || return 1
+    awk '$1 == "/dev/mmcblk0p2" && $2 == "/var/lib/wifi-bridge" && $3 == "ext4" && $4 ~ /(^|,)rw(,|$)/ && $4 ~ /(^|,)nosuid(,|$)/ && $4 ~ /(^|,)nodev(,|$)/ {ok=1} END {exit !ok}' /proc/mounts || return 1
+}

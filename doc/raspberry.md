@@ -23,13 +23,13 @@ Use the [native flasher](flasher.md), or download the release `.img.xz` and `ALP
 ```sh
 python3 tools/core-artifact.py fetch
 python3 tools/build-raspberry.py \
-  --wheel build/core/astro_bridge_core-1.0.1-py3-none-any.whl \
+  --wheel build/core/astro_bridge_core-1.1.0-py3-none-any.whl \
   --stage build/pi-release --build
 ```
 
 Use a new stage directory. The builder needs Docker, Internet and at least 8 GiB free. It uses a pinned base/aports commit, records package closure and checks the compressed image, boot files, application identity and partition geometry.
 
-Output is under `build/pi-release/dist/standard-1.0.1/`. The builder checks geometry, filesystems, package signatures, firmware/modules and exact application identity. Fresh physical boot/radio acceptance is reported separately.
+Output is under `build/pi-release/dist/standard-1.1.0/`. The builder checks geometry, filesystems, package signatures, firmware/modules and exact application identity. Fresh physical boot/radio acceptance is reported separately.
 
 ## Flash and first access
 
@@ -40,6 +40,15 @@ Output is under `build/pi-release/dist/standard-1.0.1/`. The builder checks geom
 5. Change initial access codes, select adapters, and follow the [Core setup guides](https://github.com/Sqound/astro-bridge-core/tree/main/doc).
 
 The current image uses the documented initial code **12345678**; change web, hotspot and system-account credentials independently before normal use. Existing installations retain their credentials during an application update.
+
+## Local console and SSH
+
+No image contains a password or password hash: accounts receive the documented initial password `12345678` on the first boot, and every new password is kept on the data partition.
+
+- **Raspberry Pi Zero W:** sign in as `bridge` (initial password `12345678`, administrator through `sudo`), on the HDMI console or by SSH. `root` is locked at every boot. Change the password from the web interface (Settings) or with `passwd`, then keep it with `sudo /usr/bin/python3 /usr/libexec/astro-bridge-persist save-password`.
+- **Raspberry Pi 5:** the console administrator is `root` (initial password `12345678`; SSH is not enabled). Change it with `passwd`, then keep it with `rc-service astro-console-account save` (also done at a clean shutdown). If its saved state is unusable, `root` stays locked.
+
+Change the initial password on the first sign-in, and keep the board physically secure: the local console is the recovery path.
 
 ## Upgrade an existing installation
 

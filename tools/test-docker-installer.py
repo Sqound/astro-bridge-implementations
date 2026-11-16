@@ -39,7 +39,7 @@ def main():
                     time.sleep(.2)
                 except OSError:time.sleep(.2)
             else:raise AssertionError('Installed deployment did not become ready')
-            session=request('/api/login',{'password':'demo-telescope-2026'})
+            session=request('/api/login',{'password':'12345678'})
             status=request('/api/status');assert status['demo'] and request('/api/updates')['current_version']==version
             assert session['csrf'] and (prefix/'core.lock.json').is_file()
             saved=(prefix/'docker/.env').read_text();assert f'ASTRO_BRIDGE_PORT={port}' in saved and f'ASTRO_BRIDGE_PROJECT={project}' in saved

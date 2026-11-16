@@ -1,0 +1,23 @@
+#!/sbin/openrc-run
+name="Astro Bridge onboard Wi-Fi udev initialization"
+depend() { need astro-firstboot; before networkmanager; }
+start() {
+    if ! pidof udevd >/dev/null 2>&1; then udevd --daemon || return 1; fi
+    # Replay only the known storage identity after runtime packages are installed.
+    # Hotplug add events use the same rule. A timeout must not block networking.
+    udevadm control --reload || return 1
+    udevadm trigger --action=add --subsystem-match=usb --attr-match=idVendor=0bda \
+        --attr-match=idProduct=1a2b --attr-match=bcdDevice=0200 \
+        --attr-match=manufacturer=Realtek --attr-match=product=DISK || :
+    udevadm settle --timeout=10 || :
+    [ "$(basename "$(readlink -f /sys/class/net/wlan0/device/driver)")" = brcmfmac ] || return 1
+    [ "$(basename "$(readlink -f /sys/class/net/wlan0/device/subsystem)")" = sdio ] || return 1
+    local path
+    path=$(readlink -f /sys/class/net/wlan0) || return 1
+    case "$path" in /sys/devices/*) :;; *) return 1;; esac
+    local selected
+    selected=$(udevadm trigger --dry-run --verbose --action=add --subsystem-match=net --sysname-match=wlan0) || return 1
+    [ "$selected" = "$path" ] || return 1
+    udevadm trigger --action=add --subsystem-match=net --sysname-match=wlan0 || return 1
+    udevadm settle --timeout=10
+}

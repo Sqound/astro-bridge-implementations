@@ -9,10 +9,10 @@ Use a dedicated recent Debian/Ubuntu systemd host, Python 3.11+, NetworkManager 
 ```sh
 python3 tools/core-artifact.py fetch
 sudo python3 linux/host-install.py --mode native \
-  --wheel build/core/astro_bridge_core-1.0.1-py3-none-any.whl
+  --wheel build/core/astro_bridge_core-1.1.0-py3-none-any.whl
 # After reviewing the plan:
 sudo python3 linux/host-install.py --mode native --apply \
-  --wheel build/core/astro_bridge_core-1.0.1-py3-none-any.whl
+  --wheel build/core/astro_bridge_core-1.1.0-py3-none-any.whl
 ```
 
 ![Private Wi-Fi and hotspot configuration](images/networks.png)
@@ -21,9 +21,9 @@ sudo python3 linux/host-install.py --mode native --apply \
 
 | Area | Result |
 | --- | --- |
-| Application | Isolated `/opt/astro-bridge-1.0.1` virtual environment |
+| Application | Isolated `/opt/astro-bridge-1.1.0` virtual environment |
 | Networking | Required host packages, app-owned AP/DHCP units, IPv4 forwarding |
-| Initial access | Private `/etc/wifi-bridge/bootstrap.json` with a random code |
+| Initial access | Web and hotspot password **`12345678`** for new installations; existing credentials are preserved |
 | Persistent state | `/var/lib/wifi-bridge` |
 | Certificates | Fixed helper and private persistent certificate state |
 | Activity tools | Pinned Netfilter sources compiled into the app prefix |
@@ -32,6 +32,10 @@ sudo python3 linux/host-install.py --mode native --apply \
 Compiler/development prerequisites are installed for native Netfilter builds. The distribution's conntrack binary/libraries are not replaced: `ASTRO_BRIDGE_CONNTRACK` selects the private executable. Matching source archives and licenses are retained in its installation prefix.
 
 The installer preserves existing NM profiles, does not create a Linux login account, and does not globally rename the host. Configure local DNS/mDNS separately for the chosen `.local` HTTPS name, or use supported management addresses. Additional HTTP hostnames must be explicit `--allow-host` entries.
+
+## Initial password
+
+New Raspberry, native Linux and Docker installations use **`12345678`** for the web interface and hotspot. Demo mode uses the same initial web password. Change credentials in Settings after setup. Reinstalling or updating preserves existing passwords, including customized bootstrap files. The installer does not change the host Linux account password.
 
 ## Management
 

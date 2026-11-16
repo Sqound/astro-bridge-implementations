@@ -1,0 +1,100 @@
+name: Release builds (manual)
+
+# Started by hand only ("Actions" tab, "Run workflow"). It builds the files of
+# an implementations release and keeps them as this run's artifacts; it never
+# writes a release, needs no secret and signs nothing:
+#
+#   Astro-Bridge-Setup_windows_x64-setup.exe   unsigned NSIS installer
+#   Astro-Bridge-Setup_linux_x64.deb           unsigned
+#   Astro-Bridge-Setup_linux_x64.AppImage      unsigned
+#   astro-bridge-<version>-alpine-armhf-standard.img.xz with its manifests,
+#   OTA, Docker installers and corresponding OS sources
+#   astro-bridge-<version>-alpine-aarch64-pi5.img.xz with pi5-manifest.json
+#   astro-bridge-setup-manifest.json
+#
+# The steps live in .github/actions so that every build runs the same commands.
+# The macOS Setup is built, signed (Developer ID) and notarized by a
+# maintainer on a Mac; see setup/README.md. A maintainer downloads these
+# artifacts, checks them and attaches them to the draft release.
+on:
+  workflow_dispatch:
+    inputs:
+      parts:
+        description: What to build
+        type: choice
+        default: all
+        options: [all, setup, images]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-builds-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  setup:
+    name: Setup for ${{ matrix.platform }} (unsigned)
+    if: inputs.parts != 'images'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows
+            runner: windows-2022
+          - platform: linux
+            runner: ubuntu-22.04
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.13'
+      - uses: ./.github/actions/setup-package
+        with:
+          platform: ${{ matrix.platform }}
+
+  image-pi-zero-w:
+    name: Raspberry Pi Zero W image
+    if: inputs.parts != 'setup'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.13'
+      - uses: ./.github/actions/core-wheel
+      - uses: ./.github/actions/image-pi-zero-w
+
+  image-pi-5:
+    name: Raspberry Pi 5 image
+    if: inputs.parts != 'setup'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.13'
+      - uses: ./.github/actions/core-wheel
+      - uses: ./.github/actions/image-pi-5
+
+  setup-manifest:
+    name: Setup manifest
+    needs: [image-pi-zero-w, image-pi-5]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.13'
+      - uses: ./.github/actions/setup-manifest

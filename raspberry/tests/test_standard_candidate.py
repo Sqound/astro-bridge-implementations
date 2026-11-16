@@ -1,5 +1,7 @@
 """Functional candidate inspection/stamping, without Docker/build/physical disks."""
 import gzip
+import copy
+import io
 import hashlib
 import importlib.util
 import json
@@ -8,6 +10,7 @@ from pathlib import Path
 import struct
 import subprocess
 import tempfile
+import tarfile
 import unittest
 from unittest.mock import patch
 
@@ -48,6 +51,44 @@ class StandardCandidateTests(unittest.TestCase):
         self.modules='modules/6.18-test-rpi/kernel/brcmfmac.ko.gz\nmodules/6.18-test-rpi/kernel/rtw88_8821cu.ko.gz\n'
 
     def inspect(self):return candidate.inspect_boot(self.boot,self.package_root,self.packages,self.modules,[self.key])
+
+    def test_stamp_includes_installed_camera_tables_and_rejects_private_artifacts(self):
+        app=self.root/'stamp-app';app.mkdir()
+        (app/'__init__.py').write_text('')
+        tables=app/'cameras/tables';tables.mkdir(parents=True)
+        table=tables/'uvc.json';table.write_text('{"reviewed":1}')
+        first=candidate.stamp(app)
+        table.write_text('{"reviewed":2}')
+        self.assertNotEqual(first,candidate.stamp(app))
+        for name in ('maker-keys.kek','maker-keys.bin'):
+            path=app/name;path.write_bytes(b'opaque')
+            with self.assertRaises(ValueError):candidate.stamp(app)
+            path.unlink()
+        from helpers.maker_keys import pem
+        private=app/'fixture.py';private.write_bytes(pem())
+        with self.assertRaises(ValueError):candidate.stamp(app)
+
+    def test_overlay_rejects_private_content_even_with_matching_source_identity(self):
+        from helpers.maker_keys import pem
+        with tarfile.open(next(self.boot.glob('*.apkovl.tar.gz'))) as archive:
+            members=[(copy.copy(m),archive.extractfile(m).read() if m.isfile() else None) for m in archive.getmembers()]
+        for filename,payload in (('maker-keys.bin',b'opaque'),('maker-keys.kek',b'opaque'),('fixture.py',pem())):
+            name='opt/wifi-bridge/wifi_bridge/static/'+filename
+            files={m.name.removeprefix('./').removeprefix('opt/wifi-bridge/'):data for m,data in members
+                   if m.isfile() and m.name.removeprefix('./').startswith('opt/wifi-bridge/wifi_bridge/')}
+            files['wifi_bridge/static/'+filename]=payload
+            identity=candidate.source_identity(files)
+            stream=io.BytesIO()
+            with tarfile.open(fileobj=stream,mode='w:gz') as output:
+                for member,data in members:
+                    if member.name.removeprefix('./')=='opt/wifi-bridge/wifi_bridge/build.py':
+                        data=f'BUILD_ID = "{identity}"\n'.encode();member.size=len(data)
+                    output.addfile(member,io.BytesIO(data) if data is not None else None)
+                extra=tarfile.TarInfo(name);extra.size=len(payload);output.addfile(extra,io.BytesIO(payload))
+            stream.seek(0)
+            with tarfile.open(fileobj=stream) as poisoned, patch.object(candidate.tarfile,'open',return_value=poisoned):
+                with self.assertRaisesRegex(ValueError,'Private key material'):
+                    candidate.overlay(self.boot)
 
     def test_real_overlay_stamps_same_ota_identity_and_preserves_source(self):
         from wifi_bridge.ota import tree_identity
@@ -117,13 +158,14 @@ class StandardCandidateTests(unittest.TestCase):
             return subprocess.check_output(['git',*args],cwd=repository,stderr=subprocess.DEVNULL,text=True).strip()
         git('init','-q')
         content={'wifi_bridge/__init__.py':'__version__ = "0.6.1"\n',
+                 'wifi_bridge/cameras/tables/uvc.json':(ROOT/'wifi_bridge/cameras/tables/uvc.json').read_text(),
                  'wifi_bridge/build.py':'BUILD_ID = None\n',
                  'image/alpine/standard/candidate.py':'# committed recipe\n',
                  'image/alpine/standard/inputs.json':(ROOT/'image/alpine/standard/inputs.json').read_text(),
                  '.gitignore':'private/\n','unrelated.txt':'not a build input\n'}
         for name,value in content.items():
             path=repository/name;path.parent.mkdir(parents=True,exist_ok=True);path.write_text(value)
-        git('add','.')
+        git('add','--',*content)
         git('-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-qm','Synthetic fixture')
         (repository/'private').mkdir();(repository/'private/canary').write_text('synthetic private canary')
         (repository/'wifi_bridge/__init__.py').write_text('__version__ = "9.9.9"\n')
@@ -135,10 +177,19 @@ class StandardCandidateTests(unittest.TestCase):
             linked=repository/'dist/linked';linked.symlink_to(self.root/'foreign')
             with self.assertRaises(ValueError):candidate.prepare(linked,snapshot)
         self.assertEqual((snapshot/'wifi_bridge/__init__.py').read_text(),content['wifi_bridge/__init__.py'])
+        self.assertEqual((snapshot/'wifi_bridge/cameras/tables/uvc.json').read_text(),content['wifi_bridge/cameras/tables/uvc.json'])
         self.assertFalse((snapshot/'.git').exists());self.assertFalse((snapshot/'private').exists());self.assertFalse((snapshot/'unrelated.txt').exists())
+        initial_commit=git('rev-parse','HEAD')
+        secret=repository/'wifi_bridge/static/maker-keys.bin';secret.parent.mkdir(parents=True);secret.write_bytes(b'opaque')
+        git('add','--','wifi_bridge/static/maker-keys.bin')
+        git('-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-qm','Synthetic excluded artifact')
+        private_snapshot=self.root/'private-snapshot';private_snapshot.mkdir()
+        with patch.object(candidate,'ROOT',repository), patch('shutil.disk_usage',return_value=type('Space',(),{'free':10*1024**3})()):
+            with self.assertRaises(ValueError):candidate.prepare(repository/'dist/private-candidate',private_snapshot)
+        self.assertFalse((private_snapshot/'wifi_bridge/static/maker-keys.bin').exists())
         metadata=(output/'source.json').read_text();value=json.loads(metadata)
         self.assertEqual(value['version'],'0.6.1');self.assertTrue(value['working_tree_dirty'])
-        self.assertEqual(value['source_commit'],git('rev-parse','HEAD'))
+        self.assertEqual(value['source_commit'],initial_commit)
         self.assertNotIn(str(repository),metadata);self.assertNotIn('fixture@example.invalid',metadata)
 
     def test_snapshot_stage_is_private_dist_child_not_unshared_tmpdir_or_symlink(self):
@@ -186,11 +237,11 @@ class StandardCandidateTests(unittest.TestCase):
         result=subprocess.run(['/bin/sh',str(script)],env=environment,stdin=subprocess.DEVNULL,capture_output=True,text=True,timeout=10)
         self.assertEqual(result.returncode,73,result.stderr);self.assertEqual(trace.read_text().splitlines(),['apk'])
         self.assertFalse((out/'builder-packages.json').exists());self.assertFalse((work/'job/aports').exists())
-        trace.unlink();tool('cp','printf "cp\\n" >> "$TEST_TRACE"; exit 71')
+        trace.unlink();tool('python3','printf "copy-app\\n" >> "$TEST_TRACE"; exit 71')
         tmp=self.root/'generator-tmp';tmp.mkdir()
         environment.update(ASTRO_BRIDGE_PROJECT=str(ROOT),TMPDIR=str(tmp))
         result=subprocess.run(['/bin/sh',str(ROOT/'image/alpine/standard/genapkovl-astrobridge.sh'),'synthetic-failfast'],cwd=out,env=environment,stdin=subprocess.DEVNULL,capture_output=True,text=True,timeout=10)
-        self.assertEqual(result.returncode,71,result.stderr);self.assertEqual(trace.read_text().splitlines(),['cp'])
+        self.assertEqual(result.returncode,71,result.stderr);self.assertEqual(trace.read_text().splitlines(),['copy-app'])
         self.assertFalse((out/'synthetic-failfast.apkovl.tar.gz').exists());self.assertEqual(list(tmp.iterdir()),[])
 
     def test_fresh_data_root_is_private_only_on_exact_owned_mount(self):

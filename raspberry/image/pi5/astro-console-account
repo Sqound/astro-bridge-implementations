@@ -1,0 +1,7 @@
+#!/sbin/openrc-run
+name="Astro Bridge console account"
+extra_started_commands="save"
+depend() { need astro-data astro-firstboot; before local; }
+start() { /usr/bin/python3 /etc/wifi-bridge/console-account.py apply; }
+save() { /usr/bin/python3 /etc/wifi-bridge/console-account.py save; }
+stop() { /usr/bin/python3 /etc/wifi-bridge/console-account.py save; }

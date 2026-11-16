@@ -27,11 +27,75 @@ API = 'https://api.github.com/repos/' + REPOSITORY + '/releases/latest'
 STATE = Path('/var/lib/wifi-bridge/updates')
 ALPINE = Path('/etc/alpine-release').exists()
 APP = Path('/var/lib/wifi-bridge/app/wifi_bridge') if ALPINE else Path('/opt/wifi-bridge/wifi_bridge')
-PLATFORM = 'linux-alpine-armhf' if ALPINE else 'linux-raspios-armhf'
-UPDATER_VERSION = 2
+LIVE_PLATFORMS = ('linux-alpine-x86_64', 'linux-alpine-aarch64')
+
+
+def live_platform(root=Path('/'), machine=None):
+    """An immutable OS declaration, never an app preference or environment flag."""
+    import platform as host
+    machine = machine or host.machine()
+    path = root / 'etc/wifi-bridge/ota-platform'
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except FileNotFoundError:
+        return None
+    with os.fdopen(fd, 'rb') as stream:
+        info = os.fstat(stream.fileno())
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022 or info.st_size > 64:
+            raise ValueError('Invalid OS update platform declaration.')
+        value = stream.read(65).decode().strip()
+    expected = {'x86_64': LIVE_PLATFORMS[0], 'aarch64': LIVE_PLATFORMS[1]}.get(machine)
+    if value != expected:
+        raise ValueError('OS update platform does not match this architecture.')
+    return value
+
+
+def installed_platform():
+    if not ALPINE: return 'linux-raspios-armhf'
+    try:
+        target = live_platform()
+        if target: return target
+    except (OSError, ValueError, UnicodeError):
+        return 'unsupported'
+    import platform as host
+    return 'linux-alpine-armhf' if host.machine() in ('armv6l', 'armv7l') else 'unsupported'
+
+
+PLATFORM = installed_platform()
+UPDATER_VERSION = 3
 ACTIVE_PHASES = ('prepared', 'applying', 'verifying')
 READY_MODES = ('setup', 'online', 'waiting_telescope', 'waiting_service')
+# The standalone updater keeps its own boundary; no application imports required.
+SECRET_FILES = frozenset(('maker-keys.kek', 'maker-keys.bin'))
+PRIVATE_ARMOUR = re.compile(b'-----'+b'BEGIN '+b'(?:[A-Z0-9]+ )?'+b'PRIVATE'+b' KEY-----')
 VERSION = re.compile(r'^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$')
+
+
+# Required v3 baseline. Reviewed updates may add modules/tables within these
+# package directories without replacing the separately installed OS validator.
+NESTED_MODULES = {
+    'cameras': '__init__ alpaca api calibration discovery driver frames listener native registry runtime service simulator usb uvc v4l2',
+    'maker_keys': '__init__ api fetch rsa service store verify',
+    'telemetry': '__init__ alpaca analysis api cards demo engineio link metrics query sessions settings store',
+    'telemetry/adapters': '__init__ alpaca_observer seestar_events vespera_status',
+}
+NESTED_FILES = frozenset(
+    f'{package}/{name}.py' for package, modules in NESTED_MODULES.items() for name in modules.split()
+) | {'cameras/tables/simulator.json', 'cameras/tables/uvc.json'}
+STATIC_SUFFIXES = {'.html', '.js', '.css', '.json', '.svg', '.png', '.ico', '.webmanifest'}
+
+
+def allowed_file(relative, nested):
+    path = PurePosixPath(relative)
+    if len(path.parts) == 1:
+        return re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*\.py', relative) is not None
+    if len(path.parts) == 2 and path.parts[0] == 'static':
+        return path.suffix in STATIC_SUFFIXES and re.fullmatch(r'[A-Za-z0-9_-][A-Za-z0-9_.-]*', path.name) is not None
+    if nested and path.parent.as_posix() in NESTED_MODULES:
+        return re.fullmatch(r'(?:__init__|[a-z][a-z0-9_]{0,62})\.py', path.name) is not None
+    if nested and path.parent.as_posix() == 'cameras/tables':
+        return re.fullmatch(r'[a-z][a-z0-9_]{0,31}\.json', path.name) is not None
+    return False
 
 
 def version(value):
@@ -82,7 +146,7 @@ def tree_identity(path):
 def asset_names(platform, value):
     if platform == 'linux-raspios-armhf':
         return 'ota-manifest.json', f'astro-bridge-{value}-ota.tar.gz'
-    if platform == 'linux-alpine-armhf':
+    if platform in ('linux-alpine-armhf', *LIVE_PLATFORMS):
         return f'ota-manifest-{platform}.json', f'astro-bridge-{value}-{platform}-ota.tar.gz'
     raise ValueError('Unsupported update platform.')
 
@@ -149,45 +213,55 @@ def budget_archive(data):
 def unpack(data, manifest, destination, platform=None):
     platform = platform or PLATFORM
     if not isinstance(manifest, dict): raise ValueError('Invalid update manifest.')
-    if (type(manifest.get('format')) is not int or manifest.get('format') not in (1, 2) or manifest.get('platform') != platform
-            or type(manifest.get('minimum_updater', 1)) is not int
-            or not 1 <= manifest.get('minimum_updater', 1) <= UPDATER_VERSION
-            or (platform == 'linux-alpine-armhf' and (manifest.get('format') != 2 or manifest.get('minimum_updater') != 2))
-            or manifest.get('scope', 'application-only') != 'application-only'):
+    fmt = manifest.get('format')
+    minimum = manifest.get('minimum_updater', 1)
+    formats = ((3, 3),) if platform in LIVE_PLATFORMS else ((2, 2), (3, 3)) if platform == 'linux-alpine-armhf' else ((1, 1), (2, 2), (3, 3))
+    if (platform not in ('linux-alpine-armhf', 'linux-raspios-armhf', *LIVE_PLATFORMS) or manifest.get('platform') != platform
+            or type(fmt) is not int or type(minimum) is not int or (fmt, minimum) not in formats
+            or minimum > UPDATER_VERSION or manifest.get('scope', 'application-only') != 'application-only'):
         raise ValueError('This update targets an unsupported platform or format.')
     version(manifest.get('version'))
     if hashlib.sha256(data).hexdigest() != manifest.get('sha256'):
         raise ValueError('Update checksum mismatch.')
     with budget_archive(data) as archive:
-        entries = []
         names = set()
         total = 0
         for entry in archive:
             path = PurePosixPath(entry.name)
+            if any(part in SECRET_FILES for part in path.parts):
+                raise ValueError('Private key files are excluded from OTA.')
             if (not entry.isfile() or path.is_absolute() or '..' in path.parts or
                     not path.parts or path.parts[0] != 'wifi_bridge' or
                     len(path.parts) < 2 or entry.name in names):
                 raise ValueError('Unsafe or duplicate update archive entry.')
-            if len(path.parts) > 3 or len(path.parts) > 2 and path.parts[1] != 'static':
-                raise ValueError('Unexpected application directory.')
-            if len(path.parts) == 2 and path.suffix != '.py':
+            if not allowed_file(str(path.relative_to('wifi_bridge')), fmt == 3):
                 raise ValueError('Unexpected application file.')
-            if len(path.parts) == 3 and (path.suffix not in {'.html', '.js', '.css', '.json', '.svg', '.png', '.ico', '.webmanifest'} or not re.fullmatch(r'[A-Za-z0-9_.-]+', path.name)):
-                raise ValueError('Unexpected static asset.')
             if str(path) != entry.name:
                 raise ValueError('Noncanonical archive path.')
             names.add(entry.name)
-            entries.append(entry)
+            if not 0 <= entry.size <= 4*1024*1024: raise ValueError('Update member exceeds its size limit.')
+            with archive.extractfile(entry) as source:
+                content = source.read()
+            if PRIVATE_ARMOUR.search(content): raise ValueError('Private key material is excluded from OTA.')
+            if path.parent.parts == ('wifi_bridge', 'cameras', 'tables'):
+                if len(content) > 16384: raise ValueError('Camera descriptor exceeds its size limit.')
+                table = json.loads(content)
+                if not isinstance(table, dict) or table.get('id') != path.stem:
+                    raise ValueError('Invalid bundled camera descriptor.')
             total += entry.size
             if total > 30 * 1024 * 1024 or len(names) > 512:
                 raise ValueError('Unpacked update exceeds its size limit.')
         required = {'wifi_bridge/__init__.py', 'wifi_bridge/__main__.py', 'wifi_bridge/static/index.html'}
         if not required <= names:
             raise ValueError('Incomplete application update.')
-        if manifest.get('minimum_updater') == 2:
+        if minimum >= 2:
             required |= {'wifi_bridge/build.py', 'wifi_bridge/static/i18n.js', 'wifi_bridge/static/events.js'}
             if not required <= names:
                 raise ValueError('Incomplete application update.')
+        if fmt == 3 and not all('wifi_bridge/' + name in names for name in NESTED_FILES):
+            raise ValueError('Incomplete nested application update.')
+    if destination.is_symlink() or destination.exists() and any(destination.iterdir()):
+        raise ValueError('Update staging directory must be empty.')
     with budget_archive(data) as archive:
         for entry in archive:
             target = destination / entry.name
@@ -204,7 +278,7 @@ def unpack(data, manifest, destination, platform=None):
             raise ValueError('Application build identity mismatch.')
         if (destination / 'wifi_bridge/build.py').read_text() != f'BUILD_ID = "{build_id}"\n':
             raise ValueError('Invalid loaded build identity.')
-    elif manifest.get('minimum_updater') == 2:
+    elif minimum >= 2:
         raise ValueError('Missing build identity.')
 
 

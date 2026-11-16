@@ -1,0 +1,44 @@
+#!/sbin/openrc-run
+name="Astro Bridge local welcome"
+command="/usr/bin/python3"
+command_args="/etc/wifi-bridge/display.py"
+command_background=yes
+pidfile="/run/astro-display.pid"
+depend() { after wifi-bridge astro-runtime-packages astro-display-packages; }
+fallback() {
+    [ -e /run/astro-display-owned ] || return 0
+    printf '\nAstro Bridge: %s\nCheck: rc-service wifi-bridge status; tail /var/log/wifi-bridge.log\n' "$1" > /dev/tty1 2>/dev/null || :
+    [ "$(cat /sys/class/tty/tty0/active 2>/dev/null)" != tty7 ] || /bin/busybox chvt 1 2>/dev/null
+    printf '\033[?25h\033[0m\033[2J\033[H' > /dev/tty7 2>/dev/null || :
+    rm -f /run/astro-display-owned /run/astro-display-ready
+}
+stop_splash() {
+    if [ -r /run/astro-graphic-splash.pid ]; then
+        local pid n
+        read -r pid < /run/astro-graphic-splash.pid
+        case "$pid" in *[!0-9]*|'') return 1;; esac
+        # A stale PID must never signal an unrelated process. Scripts appear in
+        # cmdline as a shell plus their absolute script path.
+        if ! tr '\0' '\n' < "/proc/$pid/cmdline" 2>/dev/null | grep -Fx -e /etc/wifi-bridge/astro-display-splash-worker -e /usr/local/sbin/astro-graphic-splash-supervisor >/dev/null; then
+            rm -f /run/astro-graphic-splash.pid
+            return 0
+        fi
+        kill -TERM "$pid" 2>/dev/null || :
+        n=0
+        while kill -0 "$pid" 2>/dev/null && [ "$n" -lt 5 ]; do sleep 1; n=$((n + 1)); done
+        rm -f /run/astro-graphic-splash.pid
+        if kill -0 "$pid" 2>/dev/null; then return 1; fi
+    fi
+}
+start_pre() {
+    if ! stop_splash; then fallback 'Splash did not stop.'; return 1; fi
+    if [ ! -x /usr/bin/python3 ] || [ ! -x /usr/bin/qrencode ]; then
+        fallback 'Display components unavailable.'
+        return 1
+    fi
+    if ! /sbin/rc-service wifi-bridge status >/dev/null 2>&1; then
+        fallback 'Bridge service failed to start.'
+        return 1
+    fi
+}
+stop_post() { fallback 'Display stopped.'; }

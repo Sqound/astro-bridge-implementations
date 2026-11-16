@@ -18,10 +18,10 @@ jobs:
           python-version: '3.13'
       - run: df -h && docker info
       - run: python tools/core-artifact.py fetch --output build/core
-      - run: python tools/build-raspberry.py --wheel build/core/astro_bridge_core-1.0.1-py3-none-any.whl --stage build/pi-release --build
+      - run: python tools/build-raspberry.py --wheel build/core/astro_bridge_core-1.1.0-py3-none-any.whl --stage build/pi-release --build
       - name: Collect exact package recipes and verified upstream source archives
-        run: python tools/collect-image-sources.py --image-dir build/pi-release/dist/standard-1.0.1 --output build/os-sources
-      - run: python tools/package-release.py --wheel build/core/astro_bridge_core-1.0.1-py3-none-any.whl --pi-candidate build/pi-release/dist/standard-1.0.1 --ota-stage build/pi-release --output dist/pi
+        run: python tools/collect-image-sources.py --image-dir build/pi-release/dist/standard-1.1.0 --output build/os-sources
+      - run: python tools/package-release.py --wheel build/core/astro_bridge_core-1.1.0-py3-none-any.whl --pi-candidate build/pi-release/dist/standard-1.1.0 --ota-stage build/pi-release --output dist/pi
       - name: Require matching draft and upload image with its sources
         env:
           GH_TOKEN: ${{ github.token }}

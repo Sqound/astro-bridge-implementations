@@ -12,9 +12,10 @@ spec=importlib.util.spec_from_file_location('core',ROOT/'tools/core-artifact.py'
 
 
 def main():
-    p=argparse.ArgumentParser();p.add_argument('--wheel',type=Path,required=True);args=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument('--wheel',type=Path,required=True);p.add_argument('--candidate-lock',type=Path);args=p.parse_args()
+    lock=core.candidate_lock(args.candidate_lock) if args.candidate_lock else None
     with tempfile.TemporaryDirectory(prefix='astro-platform-tests-') as folder:
-        stage=Path(folder)/'project';core.stage(args.wheel,stage)
+        stage=Path(folder)/'project';core.stage(args.wheel,stage,lock)
         shutil.copytree(ROOT/'linux',stage/'linux')
         for name in ('install-docker.py','install-docker.sh','build-flasher.py','collect-image-sources.py'):
             shutil.copyfile(ROOT/'tools'/name,stage/'tools'/name)

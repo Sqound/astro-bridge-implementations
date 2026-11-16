@@ -1,0 +1,10 @@
+# Opt-in overlay for isolated mount PHYs on a dedicated Linux network host.
+# Apply after compose.linux.yaml. Not needed for demo or legacy routed profiles.
+# SYS_ADMIN is required by setns and ip-netns mount operations; AppArmor's Docker
+# default profile otherwise blocks the namespace bind mount. Review before use.
+services:
+  astro-bridge:
+    cap_add: [SYS_ADMIN]
+    security_opt:
+      - no-new-privileges:true
+      - apparmor:unconfined

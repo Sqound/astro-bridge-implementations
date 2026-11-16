@@ -1,0 +1,262 @@
+{
+  "runtime-extra": {
+    "avahi-0.9_rc4-r0.apk": {
+      "bytes": 153922,
+      "installed_size": 599167,
+      "license": "LGPL-2.1-or-later",
+      "origin": "avahi",
+      "sha256": "804263c2a02a86c76a6d531051b33796fc1aec67c99e6c238e8535fefceaae51",
+      "url": "https://www.avahi.org/"
+    },
+    "avahi-libs-0.9_rc4-r0.apk": {
+      "bytes": 42597,
+      "installed_size": 135384,
+      "license": "LGPL-2.1-or-later",
+      "origin": "avahi",
+      "sha256": "bf6c5092d9a90b2e5c22f007d888e8e786de73dcb9a787361d7a04afb8f8ecf6",
+      "url": "https://www.avahi.org/"
+    },
+    "avahi-openrc-0.9_rc4-r0.apk": {
+      "bytes": 1921,
+      "installed_size": 929,
+      "license": "LGPL-2.1-or-later",
+      "origin": "avahi",
+      "sha256": "8a4fada6412db8636ad2de4d6eaf3a92a70919e3d7c2d75779a12097187ec276",
+      "url": "https://www.avahi.org/"
+    },
+    "libdaemon-0.14-r6.apk": {
+      "bytes": 11908,
+      "installed_size": 67272,
+      "license": "MIT",
+      "origin": "libdaemon",
+      "sha256": "82238e6a4cbaa16db0603537ef918e37beca17cc87537f3c85632b5ea47657ce",
+      "url": "https://0pointer.de/lennart/projects/libdaemon/"
+    },
+    "libevent-2.1.13-r0.apk": {
+      "bytes": 283201,
+      "installed_size": 796288,
+      "license": "BSD-3-Clause",
+      "origin": "libevent",
+      "sha256": "7618eac5177ec3779fc2ed4ad4d533f5dfed2fc0aecf6c6274c9bf795f0e9991",
+      "url": "https://libevent.org/"
+    },
+    "libidn2-2.3.8-r0.apk": {
+      "bytes": 105430,
+      "installed_size": 198640,
+      "license": "GPL-2.0-or-later OR LGPL-3.0-or-later",
+      "origin": "libidn2",
+      "sha256": "d02ffda4510652f89c5fb89cd2e7ff721afb0c74e7d75476ad60bebe7ac0ae20",
+      "url": "https://www.gnu.org/software/libidn#libidn2"
+    },
+    "libunistring-1.4.2-r0.apk": {
+      "bytes": 746169,
+      "installed_size": 1967944,
+      "license": "GPL-2.0-or-later OR LGPL-3.0-or-later",
+      "origin": "libunistring",
+      "sha256": "58abfcbce2459071c505771a572a79953d6043d72b643ed0d5285ca39cdaf85c",
+      "url": "https://www.gnu.org/software/libunistring/"
+    },
+    "pcre2-10.49-r0.apk": {
+      "bytes": 320291,
+      "installed_size": 855784,
+      "license": "BSD-3-Clause",
+      "origin": "pcre2",
+      "sha256": "03efd0b29f7f38deb10a9ccb54f56e19683eb7ac27eb1f347e6dbd2e59ea000d",
+      "url": "https://pcre.org/"
+    }
+  },
+  "selected": {
+    "bubblewrap-0.12.0-r0.apk": {
+      "bytes": 30577,
+      "installed_size": 67608,
+      "license": "LGPL-2.1-or-later",
+      "origin": "bubblewrap",
+      "sha256": "f38670cd16e15268ab2588c6b788d380fe219de74d6430f91d102c3df1652e87",
+      "url": "https://github.com/containers/bubblewrap"
+    },
+    "cfitsio-4.6.4-r0.apk": {
+      "bytes": 573686,
+      "installed_size": 1856704,
+      "license": "CFITSIO",
+      "origin": "cfitsio",
+      "sha256": "e56757e10e24ed4eed184e6a48fbc867f48664ac086c3a89b851fe0141731159",
+      "url": "https://heasarc.gsfc.nasa.gov/fitsio/"
+    },
+    "fftw-double-libs-3.3.11-r0.apk": {
+      "bytes": 366568,
+      "installed_size": 724472,
+      "license": "GPL-2.0-or-later",
+      "origin": "fftw",
+      "sha256": "08f6ddefac396d1987ed68382a8a5e7c274d69005c32dd133b4a5dad90127149",
+      "url": "http://www.fftw.org/"
+    },
+    "gsl-2.8-r0.apk": {
+      "bytes": 1012592,
+      "installed_size": 2875696,
+      "license": "GPL-3.0-or-later",
+      "origin": "gsl",
+      "sha256": "fe7345df6bd6ca488054c834d13c28cdfca81a35e0f88ddd73a6676e2efdf6e6",
+      "url": "https://www.gnu.org/software/gsl/gsl.html"
+    },
+    "icu-data-full-78.1-r0.apk": {
+      "bytes": 12731006,
+      "installed_size": 33107408,
+      "license": "ICU",
+      "origin": "icu",
+      "sha256": "e5034d8b51ad6f4b2a934afb39bde070dcaafaafa8251b56948e9d480978d092",
+      "url": "https://icu.unicode.org/"
+    },
+    "icu-libs-78.1-r0.apk": {
+      "bytes": 1957437,
+      "installed_size": 5184720,
+      "license": "ICU",
+      "origin": "icu",
+      "sha256": "2393882dcf1e3f5be98696665c3468dd0d2a85cd568d50abd232729863df9738",
+      "url": "https://icu.unicode.org/"
+    },
+    "indi-3rdparty-gphoto-2.1.5.1-r2.apk": {
+      "bytes": 94200,
+      "installed_size": 334929,
+      "license": "LGPL-2.1-only",
+      "origin": "indi-3rdparty",
+      "sha256": "3999eb13e133be7e8f111078331e5ea209ec827dc2c85030af12599e77840aca",
+      "url": "https://github.com/indilib/indi-3rdparty"
+    },
+    "lcms2-2.19-r0.apk": {
+      "bytes": 156324,
+      "installed_size": 406232,
+      "license": "MIT",
+      "origin": "lcms2",
+      "sha256": "05c9e865ac443b8ff467c8e7c176ef323fac6c34f710410ef4f26c94478be7cd",
+      "url": "https://www.littlecms.com"
+    },
+    "libev-4.33-r1.apk": {
+      "bytes": 23987,
+      "installed_size": 67248,
+      "license": "BSD-2-Clause OR GPL-2.0-or-later",
+      "origin": "libev",
+      "sha256": "4847096245f3c97cd5560d9cb7c0395568be0aec53964a2f382c69859d1435a9",
+      "url": "http://software.schmorp.de/pkg/libev.html"
+    },
+    "libexif-0.6.26-r0.apk": {
+      "bytes": 71118,
+      "installed_size": 263928,
+      "license": "LGPL-2.0-or-later",
+      "origin": "libexif",
+      "sha256": "5d34945e0cdbf0fb585630368d9f5ec26658716a76dae44a45e927bb27b1f673",
+      "url": "https://sourceforge.net/projects/libexif/"
+    },
+    "libgomp-15.2.0-r5.apk": {
+      "bytes": 146527,
+      "installed_size": 330312,
+      "license": "GPL-2.0-or-later AND LGPL-2.1-or-later",
+      "origin": "gcc",
+      "sha256": "90576a8899c560d3983b8ac8442b5b75957a917bc1c4e950e005945080f8682f",
+      "url": "https://gcc.gnu.org"
+    },
+    "libgphoto2-2.5.33-r1.apk": {
+      "bytes": 770666,
+      "installed_size": 3699945,
+      "license": "LGPL-2.1-or-later",
+      "origin": "libgphoto2",
+      "sha256": "e2d61b448fef7b36e731bca327f4de1dd1b07061768936606eeddedea67115e0",
+      "url": "http://www.gphoto.org"
+    },
+    "libindi-2.1.5.1-r2.apk": {
+      "bytes": 7702872,
+      "installed_size": 29382492,
+      "license": "LGPL-2.1-only AND GPL-2.0-only AND BSD-3-Clause",
+      "origin": "libindi",
+      "sha256": "4c1f1a4ab712f7f5b6cf9cd65ce01240ea127c081b99b8aeb23e8da22fa5c0c4",
+      "url": "https://indilib.org"
+    },
+    "libjpeg-turbo-3.1.3-r0.apk": {
+      "bytes": 225383,
+      "installed_size": 526296,
+      "license": "BSD-3-Clause AND IJG AND Zlib",
+      "origin": "libjpeg-turbo",
+      "sha256": "0e82bb8d0abad143d9a84ee32152707e5a71176bd803b070b6179e85e11bf2be",
+      "url": "https://libjpeg-turbo.org/"
+    },
+    "libltdl-2.6.0-r1.apk": {
+      "bytes": 17169,
+      "installed_size": 67328,
+      "license": "LGPL-2.0-or-later AND GPL-2.0-or-later",
+      "origin": "libtool",
+      "sha256": "16d92108ccd2f7155c88348a144ee51fd1c28ff483ec8a1dec5f20ff67f1e079",
+      "url": "https://www.gnu.org/software/libtool/"
+    },
+    "libnova-0.15.0-r0.apk": {
+      "bytes": 1195200,
+      "installed_size": 3804704,
+      "license": "GPL-2.0-only",
+      "origin": "libnova",
+      "sha256": "b03633419314c519ca7a604f96d273088099f4fce7811a150c50dc8e35641a37",
+      "url": "https://sourceforge.net/projects/libnova/"
+    },
+    "libogg-1.3.6-r0.apk": {
+      "bytes": 20901,
+      "installed_size": 67240,
+      "license": "BSD-3-Clause",
+      "origin": "libogg",
+      "sha256": "a1805de4000502059b6de5a721b12d807ee99833efe76b9b0780e0544ae504b5",
+      "url": "https://xiph.org/ogg/"
+    },
+    "libpcre2-16-10.49-r0.apk": {
+      "bytes": 293791,
+      "installed_size": 722928,
+      "license": "BSD-3-Clause",
+      "origin": "pcre2",
+      "sha256": "645e2618496df0907003964b5c6ca4d16494675607e64b9f1f3ad73d4f448ad6",
+      "url": "https://pcre.org/"
+    },
+    "libraw-0.22.2-r0.apk": {
+      "bytes": 968303,
+      "installed_size": 2522864,
+      "license": "CDDL-1.0 OR LGPL-2.1-only",
+      "origin": "libraw",
+      "sha256": "850d4bb6440e7cfde63ba909b368c26655615616275d02a2b13889d1ba77723c",
+      "url": "https://www.libraw.org/"
+    },
+    "libtheora-1.2.0-r1.apk": {
+      "bytes": 342916,
+      "installed_size": 661168,
+      "license": "BSD-3-Clause",
+      "origin": "libtheora",
+      "sha256": "7b41c11fbd92dfa4a7ed65cec2e9d18c46b3bf015842eace14f8a66ce86573eb",
+      "url": "https://www.xiph.org"
+    },
+    "libxisf-0.2.13-r1.apk": {
+      "bytes": 129807,
+      "installed_size": 461832,
+      "license": "GPL-3.0-or-later",
+      "origin": "libxisf",
+      "sha256": "d26eb005bd994c1c2ee2d0551bc96524c226912c27524f955d17be3fff638532",
+      "url": "https://gitea.nouspiro.space/nou/libXISF"
+    },
+    "lz4-libs-1.10.0-r1.apk": {
+      "bytes": 82505,
+      "installed_size": 198392,
+      "license": "BSD-2-Clause AND GPL-2.0-or-later",
+      "origin": "lz4",
+      "sha256": "af6cbe553adda941e04ac40cf0123455b714d65392472389113e7d6dcebbd8d8",
+      "url": "https://github.com/lz4/lz4"
+    },
+    "pugixml-1.15-r0.apk": {
+      "bytes": 73911,
+      "installed_size": 198656,
+      "license": "MIT",
+      "origin": "pugixml",
+      "sha256": "25604db84bb41000d9a7f3a9a0610fcf353803d8d713f439fbdbfa8cc582767c",
+      "url": "https://pugixml.org"
+    },
+    "qt5-qtbase-5.15.18_git20251101-r0.apk": {
+      "bytes": 2888764,
+      "installed_size": 9304958,
+      "license": "LGPL-2.1-only AND LGPL-3.0-only AND GPL-3.0-only AND Qt-GPL-exception-1.0",
+      "origin": "qt5-qtbase",
+      "sha256": "38076858a898ea6185c5591fc2a767edbdf6d3b66fbf3eb723cb56fd0e159ada",
+      "url": "https://qt.io/developers/"
+    }
+  }
+}
