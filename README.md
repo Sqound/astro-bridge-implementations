@@ -2,7 +2,7 @@
 
 **Run Astro Bridge on a Raspberry Pi, a Linux computer, or Docker.**
 
-Astro Bridge Implementations is part of [PlanAstro](https://www.planastro.space/), a complete astrophotography solution: plan your night, drive your telescope and mount from your smartphone with plate solving, then process and share your images.
+Astro Bridge Implementations is part of [PlanAstro](https://www.planastro.space/), a complete astrophotography solution: plan your night, drive your telescope and mount from your smartphone, assisted by its own plate solving, then process and share your images.
 
 [![Implementation checks](https://github.com/Sqound/astro-bridge-implementations/actions/workflows/checks.yml/badge.svg)](https://github.com/Sqound/astro-bridge-implementations/actions/workflows/checks.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-d6a253.svg)](LICENSE)
