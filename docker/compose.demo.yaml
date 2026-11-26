@@ -1,7 +1,7 @@
 name: ${ASTRO_BRIDGE_PROJECT:-astro-bridge}
 services:
   astro-bridge:
-    image: astro-bridge:1.1.0-demo
+    image: astro-bridge:1.2.0-demo
     ports:
       - "127.0.0.1:${ASTRO_BRIDGE_PORT:-8787}:${ASTRO_BRIDGE_PORT:-8787}"
     environment:

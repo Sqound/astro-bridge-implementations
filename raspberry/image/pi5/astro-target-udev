@@ -19,5 +19,13 @@ start() {
     selected=$(udevadm trigger --dry-run --verbose --action=add --subsystem-match=net --sysname-match=wlan0) || return 1
     [ "$selected" = "$path" ] || return 1
     udevadm trigger --action=add --subsystem-match=net --sysname-match=wlan0 || return 1
+    # The onboard Ethernet port also appeared before udevd ran. Without this
+    # replay NetworkManager keeps it unmanaged and the wired profile never
+    # starts. A missing or wireless eth0 is skipped; it must never block boot.
+    if [ -e /sys/class/net/eth0/device ] && [ ! -e /sys/class/net/eth0/wireless ]; then
+        case "$(readlink -f /sys/class/net/eth0)" in
+            /sys/devices/*) udevadm trigger --action=add --subsystem-match=net --sysname-match=eth0 || :;;
+        esac
+    fi
     udevadm settle --timeout=10
 }

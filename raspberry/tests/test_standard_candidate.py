@@ -264,11 +264,19 @@ class StandardCandidateTests(unittest.TestCase):
         self.assertEqual(value['data_root_uid'],__import__('os').geteuid())
 
     def test_compressed_candidate_mbr_and_raw_identity_are_measured(self):
-        inputs={'image_bytes':8192,'boot_offset':512,'boot_bytes':2048,'data_offset':2560}
+        # Large enough to hold the first-boot zone at byte 65536 (blank marker, then the version 2 reader mark).
+        inputs={'image_bytes':131072,'boot_offset':512,'boot_bytes':2048,'data_offset':2560}
         raw=bytearray(inputs['image_bytes']);raw[510:512]=b'\x55\xaa'
-        for index,offset,size,kind in ((0,512,2048,0x0c),(1,2560,5632,0x83)):
+        for index,offset,size,kind in ((0,512,2048,0x0c),(1,2560,128512,0x83)):
             start=446+index*16;raw[start]=0x80 if index==0 else 0;raw[start+4]=kind;struct.pack_into('<II',raw,start+8,offset//512,size//512)
         image=self.root/'raw.img';image.write_bytes(raw)
+        seed=candidate.seed_module()
+        (self.root/'out-unreserved').mkdir()
+        unreserved=self.root/'out-unreserved'
+        (unreserved/'source.json').write_text(json.dumps({'version':'0.6.1','inputs':inputs}))
+        (unreserved/'filesystems.json').write_text(json.dumps({'data_root_mode':'0700','data_root_uid':0,'data_root_gid':0}))
+        with self.assertRaisesRegex(ValueError,'First-boot zone not reserved'):candidate.finish(image,unreserved)
+        raw[seed.SLOT_OFFSET:seed.SLOT_OFFSET+2*seed.SLOT_SIZE]=seed.blank_slot()+seed.reader_block();image.write_bytes(raw)
         out=self.root/'out';out.mkdir();(out/'source.json').write_text(json.dumps({'version':'0.6.1','inputs':inputs}))
         for name,data in [('assembled',{'app_build_id':self.identity}),('container',{}),('filesystems',{'data_root_mode':'0700','data_root_uid':0,'data_root_gid':0}),('builder-packages',[]),('package-lock',{}),('kernel-packages',[])]:
             (out/(name+'.json')).write_text(json.dumps(data))

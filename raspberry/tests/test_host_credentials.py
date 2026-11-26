@@ -1,14 +1,23 @@
-"""Credential independence, fixed Linux account and private persistence."""
+"""One bridge password: web interface, hotspot and Linux account, all or nothing, never in clear."""
+import contextlib
 import copy
+import io
 import json
 from pathlib import Path
 import subprocess
 import sys
-from unittest.mock import patch
+import tempfile
+import unittest
+from unittest.mock import Mock, patch
 
 from test_bridge import Fixture
-from wifi_bridge.config import Invalid, password_matches, validate_config
-from wifi_bridge.network import LinuxNetwork
+from wifi_bridge.api import ApiError
+from wifi_bridge.config import Invalid, Store, hotspot_ssid, password_matches
+from wifi_bridge.controller import Controller
+from wifi_bridge.network import DemoNetwork, LinuxNetwork, NetworkError
+from wifi_bridge.password import DEFAULT, wpa_psk
+
+NEW = 'Orion-nebula-42'
 
 
 class HostCredentialTests(Fixture):

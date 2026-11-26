@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Astro Bridge Setup",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "identifier": "com.sqound.astro-bridge-setup",
   "build": {"frontendDist": "../ui"},
   "app": {"withGlobalTauri": true, "windows": [{"title": "Astro Bridge Setup", "width": 1050, "height": 800, "minWidth": 700, "minHeight": 600}], "security": {"csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src ipc: http://ipc.localhost"}},

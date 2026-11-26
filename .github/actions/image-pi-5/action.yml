@@ -24,8 +24,12 @@ runs:
         set -euo pipefail
         python raspberry/image/splash/build-renderer.py --output build/splash
         python raspberry/image/pi5/build-public.py --wheel "$CORE_WHEEL" --core-lock core.lock.json \
-          --project raspberry --owner-tools raspberry/tools --splash-binary build/splash/astro-graphic-splash \
+          --project raspberry --splash-binary build/splash/astro-graphic-splash \
           --work build/pi5-work --output dist-pi5
+    - name: The bridge's driver catalog, published beside the images for Astro Bridge Setup
+      shell: bash
+      working-directory: ${{ steps.where.outputs.root }}
+      run: python tools/drivers-catalog-asset.py --wheel "$CORE_WHEEL" --output dist-pi5/drivers-catalog.json
     - name: No SSH key, saved Wi-Fi secret or private key in the image
       shell: bash
       working-directory: ${{ steps.where.outputs.root }}

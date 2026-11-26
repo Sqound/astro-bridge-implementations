@@ -1,4 +1,5 @@
 //! Published release selection and verified downloads for Astro Bridge Setup.
+pub mod drivers;
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -13,6 +14,9 @@ use url::Url;
 
 const REPO: &str = "Sqound/astro-bridge-implementations";
 const MANIFEST: &str = "astro-bridge-setup-manifest.json";
+/// Format 2 adds what each image reads at first boot and its camera support. Older Setup
+/// releases only read format 1, which a release keeps publishing beside it.
+const MANIFEST_2: &str = "astro-bridge-setup-manifest-2.json";
 const MAX_METADATA: usize = 2 * 1024 * 1024;
 const MAX_MANIFEST: usize = 256 * 1024;
 const MAX_RELEASES: usize = 100;
@@ -71,6 +75,24 @@ pub struct ReleaseArtifact {
     url: Option<Url>,
     pub source: String,
     pub wifi_seed: bool,
+    /// The image reads the bridge password from the first-boot zone (version 2).
+    pub password_seed: bool,
+    /// The image installs camera drivers placed after it on the card.
+    pub driver_drop: bool,
+    /// The image runs the camera service; without it the panel says "not supported".
+    pub camera_service: bool,
+    pub driver_arch: Option<String>,
+    #[serde(skip)]
+    drivers_catalog: Option<AssetRef>,
+}
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AssetRef {
+    asset: String,
+    sha256: String,
+    size: u64,
+    #[serde(skip)]
+    url: Option<Url>,
 }
 #[derive(Clone, Copy, Debug, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -114,6 +136,38 @@ struct Entry {
     asset: String,
     sha256: String,
     size: u64,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Manifest2 {
+    format: u32,
+    entries: Vec<Entry2>,
+    drivers_catalog: Option<AssetRef>,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Entry2 {
+    target: Target,
+    asset: String,
+    sha256: String,
+    size: u64,
+    first_boot: FirstBoot,
+    cameras: Cameras,
+}
+#[derive(Clone, Copy, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FirstBoot {
+    zone: u32,
+    wifi_seed: bool,
+    password_seed: bool,
+    driver_drop: bool,
+}
+#[derive(Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Cameras {
+    service: bool,
+    #[serde(default)]
+    arch: Option<String>,
 }
 
 fn safe_name(s: &str) -> bool {
@@ -183,8 +237,108 @@ fn artifact(release: &Release, entry: &Entry) -> Result<ReleaseArtifact> {
         sha256: entry.sha256.clone(),
         url: Some(url),
         source: "published".into(),
-        wifi_seed: false,
+        // Every published Pi 5 image (1.1.0 and later) reserves the first-boot
+        // Wi-Fi slot that its first boot reads. The writing helper still checks
+        // that slot in the downloaded bytes and refuses, before writing anything,
+        // an image without it.
+        wifi_seed: entry.target == Target::Pi5,
+        password_seed: false,
+        driver_drop: false,
+        camera_service: false,
+        driver_arch: None,
+        drivers_catalog: None,
     })
+}
+fn first_boot_artifact(
+    release: &Release,
+    entry: &Entry2,
+    catalog: &Option<AssetRef>,
+) -> Result<ReleaseArtifact> {
+    let mut found = artifact(
+        release,
+        &Entry {
+            target: entry.target,
+            asset: entry.asset.clone(),
+            sha256: entry.sha256.clone(),
+            size: entry.size,
+        },
+    )?;
+    let boot = entry.first_boot;
+    let arch_ok = match entry.cameras.arch.as_deref() {
+        None => true,
+        Some(a) => matches!(a, "arm64" | "armv6"),
+    };
+    // Zone 0: no first-boot zone (Docker, USB); zone 1: Wi-Fi only; zone 2: Wi-Fi, password, drivers.
+    if !matches!(boot.zone, 0..=2)
+        || (boot.zone < 2 && (boot.password_seed || boot.driver_drop))
+        || (boot.zone == 0 && boot.wifi_seed)
+        || !arch_ok
+        || (boot.driver_drop
+            && entry.cameras.service
+            && (entry.cameras.arch.is_none() || catalog.is_none()))
+    {
+        return Err(invalid("invalid first-boot capabilities"));
+    }
+    found.wifi_seed = boot.wifi_seed;
+    found.password_seed = boot.password_seed;
+    found.driver_drop = boot.driver_drop;
+    found.camera_service = entry.cameras.service;
+    found.driver_arch = entry.cameras.arch.clone();
+    found.drivers_catalog = if boot.driver_drop {
+        catalog.clone()
+    } else {
+        None
+    };
+    Ok(found)
+}
+fn manifest2_artifact(
+    release: &Release,
+    bytes: &[u8],
+    target: Target,
+) -> Result<Option<ReleaseArtifact>> {
+    let manifest: Manifest2 = serde_json::from_slice(bytes)?;
+    if manifest.format != 2 || manifest.entries.len() > 100 {
+        return Err(invalid("unsupported manifest format or size"));
+    }
+    let catalog = match manifest.drivers_catalog {
+        None => None,
+        Some(mut c) => {
+            if !safe_name(&c.asset)
+                || !c.asset.ends_with(".json")
+                || !sha_valid(&c.sha256)
+                || c.size == 0
+                || c.size > drivers::MAX_CATALOG as u64
+            {
+                return Err(invalid("invalid driver catalog asset"));
+            }
+            let a = release
+                .assets
+                .iter()
+                .filter(|a| a.name == c.asset)
+                .collect::<Vec<_>>();
+            if a.len() != 1 || a[0].state != "uploaded" || a[0].size != c.size {
+                return Err(invalid("driver catalog absent or mismatched"));
+            }
+            let url = expected_url(&release.tag_name, &c.asset)?;
+            if a[0].browser_download_url != url.as_str() {
+                return Err(invalid("driver catalog URL outside release"));
+            }
+            c.url = Some(url);
+            Some(c)
+        }
+    };
+    let mut targets = HashSet::new();
+    let mut result = None;
+    for entry in &manifest.entries {
+        if !targets.insert(entry.target) {
+            return Err(invalid("duplicate target"));
+        }
+        let found = first_boot_artifact(release, entry, &catalog)?;
+        if entry.target == target {
+            result = Some(found);
+        }
+    }
+    Ok(result)
 }
 fn manifest_artifact(
     release: &Release,
@@ -266,6 +420,10 @@ const LOCAL_IMAGE: &str = "astro-bridge-pi5-candidate.img.xz";
 struct LocalManifest {
     #[serde(default)]
     wifi_seed: bool,
+    #[serde(default)]
+    first_boot: Option<FirstBoot>,
+    #[serde(default)]
+    cameras: Option<Cameras>,
     target: Target,
     tag: String,
     asset: String,
@@ -309,6 +467,8 @@ pub fn local_candidate(resource_dir: &Path, target: Target) -> Result<Option<Rel
     {
         return Err(invalid("invalid local candidate metadata"));
     }
+    let boot = entry.first_boot.unwrap_or_default();
+    let cameras = entry.cameras.unwrap_or_default();
     Ok(Some(ReleaseArtifact {
         target: entry.target,
         tag: entry.tag,
@@ -317,7 +477,12 @@ pub fn local_candidate(resource_dir: &Path, target: Target) -> Result<Option<Rel
         sha256: entry.sha256,
         url: None,
         source: "local-test".into(),
-        wifi_seed: entry.wifi_seed,
+        wifi_seed: entry.wifi_seed || boot.wifi_seed,
+        password_seed: boot.password_seed,
+        driver_drop: boot.driver_drop,
+        camera_service: cameras.service,
+        driver_arch: cameras.arch,
+        drivers_catalog: None,
     }))
 }
 
@@ -336,6 +501,8 @@ pub async fn copy_local_candidate<F: FnMut(Progress)>(
         || artifact.size != current.size
         || artifact.sha256 != current.sha256
         || artifact.wifi_seed != current.wifi_seed
+        || artifact.password_seed != current.password_seed
+        || artifact.driver_drop != current.driver_drop
     {
         return Err(invalid("local candidate changed"));
     }
@@ -441,6 +608,9 @@ impl Catalog {
                 .then_with(|| b.tag_name.cmp(&a.tag_name))
         });
         for release in releases {
+            if let Some(found) = self.manifest2(&release, target).await? {
+                return Ok(found);
+            }
             let manifests: Vec<_> = release
                 .assets
                 .iter()
@@ -474,6 +644,61 @@ impl Catalog {
             }
         }
         Ok(None)
+    }
+    /// Some(result) when the release publishes the format 2 manifest; None to read format 1.
+    async fn manifest2(
+        &self,
+        release: &Release,
+        target: Target,
+    ) -> Result<Option<Option<ReleaseArtifact>>> {
+        let manifests: Vec<_> = release
+            .assets
+            .iter()
+            .filter(|a| a.name == MANIFEST_2)
+            .collect();
+        if manifests.len() > 1 {
+            return Err(invalid("duplicate manifest"));
+        }
+        let Some(m) = manifests.first() else {
+            return Ok(None);
+        };
+        if m.state != "uploaded" || m.size == 0 || m.size > MAX_MANIFEST as u64 {
+            return Err(invalid("invalid manifest asset"));
+        }
+        let url = expected_url(&release.tag_name, MANIFEST_2)?;
+        if m.browser_download_url != url.as_str() {
+            return Err(invalid("manifest URL outside release"));
+        }
+        let bytes = self.bounded(url, MAX_MANIFEST).await?;
+        if bytes.len() as u64 != m.size {
+            return Err(invalid("manifest size mismatch"));
+        }
+        if let Some(digest) = &m.digest {
+            if digest != &format!("sha256:{:x}", Sha256::digest(&bytes)) {
+                return Err(invalid("manifest digest mismatch"));
+            }
+        }
+        manifest2_artifact(release, &bytes, target).map(Some)
+    }
+    /// The driver catalog published with this artifact's release, checked by size and SHA-256.
+    pub async fn drivers_catalog(
+        &self,
+        artifact: &ReleaseArtifact,
+    ) -> Result<Option<drivers::DriversCatalog>> {
+        let Some(asset) = &artifact.drivers_catalog else {
+            return Ok(None);
+        };
+        let url = asset.url.clone().ok_or_else(|| invalid("missing URL"))?;
+        if url != expected_url(&artifact.tag, &asset.asset)? {
+            return Err(invalid("driver catalog URL outside release"));
+        }
+        let bytes = self.bounded(url, drivers::MAX_CATALOG).await?;
+        if bytes.len() as u64 != asset.size
+            || format!("{:x}", Sha256::digest(&bytes)) != asset.sha256
+        {
+            return Err(invalid("driver catalog integrity mismatch"));
+        }
+        drivers::parse_catalog(&bytes).map(Some)
     }
     pub async fn download<F: FnMut(Progress)>(
         &self,
@@ -685,6 +910,16 @@ mod tests {
             .unwrap()
             .is_none());
         assert!(
+            !manifest_artifact(&r, entries.as_bytes(), Target::Pi3)
+                .unwrap()
+                .unwrap()
+                .wifi_seed
+        );
+        let pi5 = manifest_artifact(&r, entries.replace("pi-4", "pi-5").as_bytes(), Target::Pi5)
+            .unwrap()
+            .unwrap();
+        assert!(pi5.wifi_seed && pi5.source == "published");
+        assert!(
             manifest_artifact(&r, entries.replace("pi-4", "pi-3").as_bytes(), Target::Pi3).is_err()
         );
         assert!(manifest_artifact(
@@ -708,6 +943,73 @@ mod tests {
         let docker = release();
         let bad = r#"{"format":1,"entries":[{"target":"pi-3","asset":"install-docker.sh","size":1190,"sha256":"07d4685d05065320492653bcbb0de2580c03f8800fb7a15499ded301c529db78"}]}"#;
         assert!(manifest_artifact(&docker, bad.as_bytes(), Target::Pi3).is_err());
+    }
+    #[test]
+    fn format_2_manifest_announces_what_each_image_reads() {
+        let mut r = release();
+        for (name, size) in [
+            ("pi5.img.xz", 1190u64),
+            ("zero.img.xz", 1190),
+            ("drivers-catalog.json", 100),
+        ] {
+            r.assets.push(Asset {
+                name: name.into(),
+                size,
+                digest: None,
+                browser_download_url: expected_url("v1.0.1", name).unwrap().to_string(),
+                state: "uploaded".into(),
+            });
+        }
+        let sha = "07d4685d05065320492653bcbb0de2580c03f8800fb7a15499ded301c529db78";
+        let catalog = format!(
+            r#"{{"asset":"drivers-catalog.json","sha256":"{}","size":100}}"#,
+            "a".repeat(64)
+        );
+        let good = format!(
+            r#"{{"format":2,"drivers_catalog":{catalog},"entries":[
+            {{"target":"pi-5","asset":"pi5.img.xz","sha256":"{sha}","size":1190,"first_boot":{{"zone":2,"wifi_seed":true,"password_seed":true,"driver_drop":true}},"cameras":{{"service":true,"arch":"arm64"}}}},
+            {{"target":"pi-zero-w","asset":"zero.img.xz","sha256":"{sha}","size":1190,"first_boot":{{"zone":2,"wifi_seed":true,"password_seed":true,"driver_drop":true}},"cameras":{{"service":false}}}}]}}"#
+        );
+        let pi5 = manifest2_artifact(&r, good.as_bytes(), Target::Pi5)
+            .unwrap()
+            .unwrap();
+        assert!(pi5.wifi_seed && pi5.password_seed && pi5.driver_drop && pi5.camera_service);
+        assert_eq!(pi5.driver_arch.as_deref(), Some("arm64"));
+        assert!(pi5.drivers_catalog.as_ref().unwrap().url.is_some());
+        let zero = manifest2_artifact(&r, good.as_bytes(), Target::PiZeroW)
+            .unwrap()
+            .unwrap();
+        assert!(zero.wifi_seed && zero.password_seed && !zero.camera_service);
+        let json = serde_json::to_value(&zero).unwrap();
+        assert!(
+            json.get("drivers_catalog").is_none()
+                && json.get("password_seed") == Some(&serde_json::Value::Bool(true))
+        );
+        for bad in [
+            good.replace(
+                "\"zone\":2,\"wifi_seed\":true,\"password_seed\":true",
+                "\"zone\":1,\"wifi_seed\":true,\"password_seed\":true",
+            ),
+            good.replace("\"arch\":\"arm64\"", "\"arch\":\"x86\""),
+            good.replace("drivers-catalog.json", "../catalog.json"),
+            good.replace("\"size\":100", "\"size\":101"),
+            good.replace("\"format\":2", "\"format\":1"),
+            good.replace(
+                "\"cameras\":{\"service\":false}",
+                "\"cameras\":{\"service\":false,\"other\":1}",
+            ),
+        ] {
+            assert!(
+                manifest2_artifact(&r, bad.as_bytes(), Target::Pi5).is_err(),
+                "{bad}"
+            );
+        }
+        // Without a driver catalog a camera image cannot offer drivers.
+        let no_catalog = good.replace(&format!("\"drivers_catalog\":{catalog},"), "");
+        assert!(manifest2_artifact(&r, no_catalog.as_bytes(), Target::Pi5).is_err());
+        // Format 1 releases keep the Pi 5 Wi-Fi rule and nothing else.
+        let old = legacy(&release(), Target::Docker).unwrap().unwrap();
+        assert!(!old.password_seed && !old.driver_drop && !old.camera_service);
     }
     #[test]
     fn network_error_redacts_url() {

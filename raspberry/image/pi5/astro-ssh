@@ -1,0 +1,10 @@
+#!/sbin/openrc-run
+name="Astro Bridge remote console (SSH)"
+command="/usr/sbin/sshd"
+command_args="-f /run/astro-ssh/sshd_config"
+pidfile="/run/astro-sshd.pid"
+depend() { need astro-data astro-runtime-packages; after astro-console-account entropy; }
+start_pre() {
+    /usr/bin/python3 /etc/wifi-bridge/ssh-access.py prepare || return 1
+    /usr/sbin/sshd -t -f /run/astro-ssh/sshd_config || return 1
+}

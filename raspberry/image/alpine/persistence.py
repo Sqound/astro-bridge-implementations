@@ -1,28 +1,46 @@
 #!/usr/bin/python3
 """Fixed diskless identity/time tasks; independent of the OTA application tree."""
 import contextlib
+from datetime import datetime, timezone
 import fcntl
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import stat
+import struct
 import subprocess
 import sys
 import tempfile
 import time
 
+# The SSH rule shared with the Raspberry Pi 5 image: /usr/libexec in the image,
+# image/common in the source tree.
+for _folder in (Path(__file__).resolve().parent, Path(__file__).resolve().parents[1] / 'common'):
+    if (_folder / 'astro_ssh_rule.py').is_file():
+        sys.path.insert(0, str(_folder))
+        break
+import astro_ssh_rule  # noqa: E402
+import astro_seed  # noqa: E402  (same folder: /usr/libexec in the image, image/common in the tree)
+
 STATE = '/var/lib/wifi-bridge'
+SSH_DROP_IN = '/etc/ssh/sshd_config.d/astro-bridge.conf'
 KEYS = ('ssh_host_ed25519_key', 'ssh_host_rsa_key', 'ssh_host_ecdsa_key')
 MIN_TIME, MAX_TIME = 1577836800, 4102444800  # 2020 through 2100; never proof of sync.
+APP = '/opt/wifi-bridge'  # The application of this image (the data copy may be a newer OTA).
+BLKGETSIZE64 = 0x80081272
+SEED_KEYS = {'config', 'bridge_hash', 'drivers', 'notice'}
 
 
 class Persistence:
     # Root injection is for offline tests only. CLI accepts fixed action names,
     # never a root/path/account supplied by a caller or environment variable.
     def __init__(self, root=Path('/'), run=subprocess.run, now=time.time,
-                 set_time=lambda value: time.clock_settime(time.CLOCK_REALTIME, value)):
+                 set_time=lambda value: time.clock_settime(time.CLOCK_REALTIME, value), seed_device=None):
         self.root, self.run, self.now, self.set_time = Path(root), run, now, set_time
+        self.seed_device = seed_device or self.card_seed
+        self.crypt = astro_ssh_rule.sha512_crypt
         self.state = self.path(STATE)
         self.identity = self.state / 'identity'
 
@@ -146,7 +164,7 @@ class Persistence:
             self.command(['/usr/sbin/adduser', '-D', '-h', '/home/bridge', '-s', '/bin/ash', '-G', 'wheel', 'bridge'])
             if value is None:
                 bootstrap = json.loads(self.read_private(self.path('/etc/wifi-bridge/bootstrap.json')))
-                self.command(['/usr/sbin/chpasswd'], input='bridge:' + self.password(bootstrap['password']) + '\n')
+                self.command(['/usr/sbin/chpasswd', '-c', 'SHA512'], input='bridge:' + self.password(bootstrap['password']) + '\n')
         if value is not None:
             self.set_hash(value)
         else:
@@ -168,7 +186,8 @@ class Persistence:
                 self.stored_hash()  # Provisioning must have completed successfully.
                 old_record = self.read_private(self.identity / 'bridge-password.json')
                 old_hash = self.shadow_hash()
-                self.command(['/usr/sbin/chpasswd'], input='bridge:' + password + '\n')
+                # SHA-512 crypt: the hash scheme the SSH rule can check.
+                self.command(['/usr/sbin/chpasswd', '-c', 'SHA512'], input='bridge:' + password + '\n')
                 try:
                     self.save_password()
                 except Exception:
@@ -179,6 +198,33 @@ class Persistence:
                     raise
         finally:
             pending.unlink(missing_ok=True)
+        # The password is changed and kept: SSH follows it. Never fails the change.
+        try:
+            self.ssh_access()
+            if self.root == Path('/'):
+                self.command(['/sbin/rc-service', '--ifstarted', 'sshd', 'reload'])
+        except Exception:
+            pass
+
+    def ssh_access(self):
+        """Same rule as the Pi 5 image: SSH accepts bridge's password only once it is not the initial one.
+
+        Written before sshd starts at every boot, and after each password change.
+        In any doubt password login stays off. Returns what SSH now accepts.
+        """
+        try:
+            allowed = astro_ssh_rule.password_changed(self.shadow_hash(), astro_ssh_rule.initial_password(
+                self.path('/etc/wifi-bridge/bootstrap.json')), self.crypt)
+        except Exception:
+            allowed = False
+        drop_in = self.path(SSH_DROP_IN)
+        drop_in.parent.mkdir(parents=True, exist_ok=True)
+        lines = ['PermitRootLogin no', 'AllowUsers bridge', 'PubkeyAuthentication yes',
+                 'PasswordAuthentication ' + ('yes' if allowed else 'no'), 'KbdInteractiveAuthentication no',
+                 'PermitEmptyPasswords no', 'MaxAuthTries 3', 'LoginGraceTime 30', '']
+        self.atomic(drop_in, '\n'.join(lines).encode(), 0o644)
+        astro_ssh_rule.write_state(self.path('/run/astro-ssh'), allowed)
+        return allowed
 
     def host_keys(self):
         destination = self.identity / 'ssh'
@@ -239,6 +285,140 @@ class Persistence:
         if MIN_TIME <= value <= MAX_TIME:
             self.atomic(self.state / 'clock-lower-bound', str(value).encode())
 
+    def close_ssh(self):
+        drop_in = self.path(SSH_DROP_IN)
+        drop_in.parent.mkdir(parents=True, exist_ok=True)
+        self.atomic(drop_in, b'PermitRootLogin no\nAllowUsers bridge\nPasswordAuthentication no\nKbdInteractiveAuthentication no\n', 0o644)
+        astro_ssh_rule.write_state(self.path('/run/astro-ssh'), False)
+
+    # --- first-boot zone written by Astro Bridge Setup (image/common/astro_seed.py) ---
+
+    @staticmethod
+    def card_seed():
+        """(stream, raw zone, card size) of the Pi Zero W card, or (None, None, 0). Never another disk."""
+        fd = None
+        try:
+            fd = os.open('/dev/mmcblk0', os.O_RDWR | os.O_NOFOLLOW | os.O_CLOEXEC)
+            info = os.fstat(fd)
+            if not stat.S_ISBLK(info.st_mode) or info.st_uid != 0 or (os.major(info.st_rdev), os.minor(info.st_rdev)) != (179, 0):
+                raise ValueError('device mismatch')
+            size = struct.unpack('Q', fcntl.ioctl(fd, BLKGETSIZE64, bytes(8)))[0]
+            stream = os.fdopen(fd, 'r+b', buffering=0)
+            fd = None
+            found = astro_seed.read_slot(stream, size)
+            if not found or found[0] != 'zero-w':
+                stream.close()
+                return None, None, 0
+            return stream, found[1], size
+        except (OSError, ValueError):
+            if fd is not None:
+                os.close(fd)
+            return None, None, 0
+
+    def app_modules(self):
+        app = str(self.path(APP))
+        if os.path.isdir(app) and app not in sys.path:
+            sys.path.insert(0, app)
+        from wifi_bridge import config, password
+        return config, password
+
+    def seed_identity(self, raw):
+        """Derived values for the first boot: never the clear password. None when the zone asks nothing."""
+        config, password = self.app_modules()
+        mac = self.path('/sys/class/net/wlan0/address').read_text().strip().lower()
+        if not re.fullmatch(r'(?:[a-f0-9]{2}:){5}[a-f0-9]{2}', mac):
+            raise RuntimeError('Invalid onboard radio address')
+        seed = astro_seed.parse(raw, 'zero-w', mac, config.validate_network, password.check)
+        if seed is None:
+            return None
+        value = config.default_config(mac)
+        if seed['wifi']:
+            # Same as the Pi 5: the radio joins the private network and keeps the hotspot as fallback.
+            value['home'], value['country'] = seed['wifi']
+            value['interface_roles'] = {mac: 'auto'}
+            value['hotspot'] = dict(value.get('hotspot', {}), enabled=True, mac='')
+        result = {'config': value, 'bridge_hash': None, 'drivers': seed['drivers'], 'notice': list(seed['problems'])}
+        clear, seed['password'] = seed['password'], None
+        if clear:
+            try:
+                derived = dict(value, admin_hash=config.password_hash(clear),
+                               hotspot_key=password.hotspot_key(clear, config.hotspot_ssid(value, mac)),
+                               linux_password_default=False)
+                result['bridge_hash'] = astro_seed.sha512_crypt_hash(clear, self.run)
+                result['config'] = derived
+            except Exception:
+                result['notice'].append('password')  # The default password stays, and the bridge says so.
+            finally:
+                clear = None
+        result['notice'] = sorted(set(result['notice']))
+        return result
+
+    def apply_drivers(self, stream, pointer, size):
+        """Camera drivers placed by Setup, checked against this bridge's own catalog."""
+        self.app_modules()
+        from wifi_bridge.cameras import catalog, drivers
+        folder = self.state / 'camera-drivers'
+        folder.mkdir(mode=0o700, exist_ok=True)
+        clock = {'clock_status': 'unverified', 'corrected_utc': datetime.fromtimestamp(self.now(), timezone.utc).isoformat()}
+
+        def install(vendor, build, path):
+            drivers.install_archive(vendor, build, path, clock, 'setup', drivers=folder)
+
+        results = astro_seed.apply_drop(stream, pointer, size, catalog=catalog.catalog(), arch='armv6',
+                                        install=install, workdir=str(folder))
+        self.atomic(folder / 'setup-results.json', json.dumps(results).encode())
+        return results
+
+    def first_boot_seed(self):
+        """Apply the zone once, before the account exists: the zone is erased as soon as its derived
+        values are durable, even when part of it was refused."""
+        pending = self.identity / 'seed-pending.json'
+        stream, raw, size = self.seed_device()
+        written = raw is not None and not astro_seed.is_blank(raw)
+        try:
+            value = None
+            if pending.exists() or pending.is_symlink():
+                value = json.loads(self.read_private(pending))
+                if not isinstance(value, dict) or set(value) != SEED_KEYS:
+                    raise RuntimeError('Invalid first-boot transaction')
+            elif written:
+                first = not (self.state / 'config.json').exists() and not (self.identity / 'bridge-password.json').exists()
+                try:
+                    value = self.seed_identity(raw) if first else None
+                    if value is not None:
+                        self.atomic(pending, json.dumps(value).encode())
+                except Exception:
+                    # Nothing applied: the bridge keeps the default password and says so.
+                    value = None
+                    self.atomic(self.state / 'firstboot-notice.json', json.dumps({'not_applied': ['all']}).encode())
+            if written:
+                astro_seed.clear(stream)
+                written = False
+            if value is None:
+                return None
+            if value['bridge_hash']:
+                self.atomic(self.identity / 'bridge-password.json',
+                            json.dumps({'version': 1, 'hash': self.valid_hash(value['bridge_hash'])}).encode())
+            if not (self.state / 'config.json').exists():
+                self.atomic(self.state / 'config.json', json.dumps(value['config']).encode())
+            if value['notice']:
+                self.atomic(self.state / 'firstboot-notice.json', json.dumps({'not_applied': value['notice']}).encode())
+            if value['drivers'] and stream is not None:
+                try:
+                    self.apply_drivers(stream, value['drivers'], size)
+                except Exception:
+                    pass  # Drivers never block the identity or the network.
+            pending.unlink()
+            self.sync_directory(self.identity)
+            return value
+        finally:
+            if stream is not None:
+                try:
+                    if written and astro_seed.holds_password(raw):
+                        astro_seed.clear(stream)  # Whatever failed, the password never stays on the card.
+                finally:
+                    stream.close()
+
     def lock_root(self):
         # The console administrator is "bridge" (sudo); root never keeps the
         # empty password of a diskless Alpine root file system.
@@ -246,15 +426,28 @@ class Persistence:
 
     def boot(self):
         self.lock_root()
-        with self.locked():
-            self.account()
-            self.host_keys()
-            self.restore_time()
-            self.checkpoint_time()
+        try:
+            with self.locked():
+                try:
+                    self.first_boot_seed()
+                except Exception:
+                    pass  # A refused zone leaves the default password; it never blocks the account.
+                self.account()
+                self.host_keys()
+                self.ssh_access()
+                self.restore_time()
+                self.checkpoint_time()
+        except BaseException:
+            # No proved account state: SSH must not accept a password.
+            try:
+                self.close_ssh()
+            except Exception:
+                pass
+            raise
 
 
 def main():
-    if os.getuid() != 0 or len(sys.argv) != 2 or sys.argv[1] not in ('boot', 'password', 'save-password', 'checkpoint'):
+    if os.getuid() != 0 or len(sys.argv) != 2 or sys.argv[1] not in ('boot', 'password', 'save-password', 'checkpoint', 'ssh'):
         raise SystemExit('Fixed root-only persistence action required')
     helper = Persistence()
     try:
@@ -264,6 +457,8 @@ def main():
             helper.change_password()
         elif sys.argv[1] == 'checkpoint':
             helper.checkpoint_time()
+        elif sys.argv[1] == 'ssh':
+            helper.ssh_access()  # Persistent-root images: the same rule, without the data volume.
         else:
             with helper.locked():
                 helper.save_password()

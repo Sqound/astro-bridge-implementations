@@ -12,16 +12,22 @@ P2_OFFSET, P2_SECTORS = 266240, 2097152
 SECTOR = 512
 SEED_OFFSET, SEED_SIZE = 65536, 4096
 SEED_MAGIC = b'ASTRO-WIFI-SEED-1\n'
+# The first-boot zone, version 2 (image/common/astro_seed.py): the blank zone keeps the
+# version 1 marker for older Setup releases; the reader mark right after it tells Setup
+# that this image reads version 2 (Wi-Fi, bridge password, camera driver drop).
+READER_OFFSET = SEED_OFFSET + SEED_SIZE
+READER_MARK = b'ASTRO-SEED-READER-2\n'
 
 def assert_seed_blank(path):
     with path.open('rb') as f:
         f.seek(SEED_OFFSET)
-        if f.read(SEED_SIZE) != bytes(SEED_SIZE):
+        if f.read(2*SEED_SIZE) != bytes(2*SEED_SIZE):
             raise ValueError('seed range is not blank')
 
 def reserve_seed(stream):
     stream.seek(SEED_OFFSET)
     stream.write(SEED_MAGIC + bytes(SEED_SIZE-len(SEED_MAGIC)))
+    stream.write(READER_MARK + bytes(SEED_SIZE-len(READER_MARK)))
 
 def digest(p):
     h=hashlib.sha256()

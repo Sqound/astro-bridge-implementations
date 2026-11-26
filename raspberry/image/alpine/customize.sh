@@ -59,6 +59,8 @@ install -d -m 755 "$ROOT/opt/wifi-bridge/wifi_bridge/static" "$ROOT/etc/wifi-bri
 install -d -m 700 "$ROOT/var/lib/wifi-bridge"
 python3 scripts/copy-app.py wifi_bridge "$ROOT/opt/wifi-bridge/wifi_bridge"
 install -m 755 image/alpine/openrc/* "$ROOT/etc/init.d/"
+install -D -m 755 image/alpine/persistence.py "$ROOT/usr/libexec/astro-bridge-persist"
+install -D -m 644 image/common/astro_ssh_rule.py "$ROOT/usr/libexec/astro_ssh_rule.py"
 install -m 644 systemd/wifi-bridge-http.service "$ROOT/etc/avahi/services/"
 echo openrc > "$ROOT/etc/wifi-bridge/init-system"
 echo astro-bridge-alpine > "$ROOT/etc/hostname"
@@ -89,7 +91,7 @@ dtoverlay=disable-bt
 CONF
 printf 'console=tty1 console=ttyAMA0,115200 root=/dev/mmcblk0p2 rootfstype=ext4 modules=sd-mod,usb-storage,mmc_block,ext4 rootwait rw\n' > "$ROOT/boot/cmdline.txt"
 mkdir -p "$ROOT/etc/sysctl.d"
-echo 'net.ipv4.ip_forward=1' > "$ROOT/etc/sysctl.d/80-wifi-bridge.conf"
+printf '%s\n' 'net.ipv4.ip_forward=1' 'net.ipv4.conf.all.arp_ignore=1' > "$ROOT/etc/sysctl.d/80-wifi-bridge.conf"
 echo brcmfmac >> "$ROOT/etc/modules"
 python3 scripts/bootstrap.py "$ROOT/etc/wifi-bridge/bootstrap.json" "$ROOT/boot/wifi-bridge-access.txt"
 # Console setup runs entirely in the emulated target, with secrets on stdin.

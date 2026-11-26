@@ -15,7 +15,7 @@ else:
     atomic_json(config_path, value)
 payload = ("SMART TELESCOPE / WI-FI BRIDGE — KEEP THIS ACCESS FILE\n\n"
            "1. Power on the Pi and allow up to three minutes on first boot.\n"
-           "2. Join AstroBridge-Setup-xxxxxx (Pi MAC suffix).\n"
+           "2. Join the Wi-Fi network astro-bridge-xxxxxx (Pi MAC suffix).\n"
            "3. Open http://192.168.77.1 in your browser.\n"
            "4. Hotspot and initial web access code: " + value["password"] + "\n"
            "5. Configure networks. Change default passwords in Settings.\n\n"

@@ -41,12 +41,20 @@ Output is under `build/pi-release/dist/standard-1.1.0/`. The builder checks geom
 
 The current image uses the documented initial code **12345678**; change web, hotspot and system-account credentials independently before normal use. Existing installations retain their credentials during an application update.
 
+## Raspberry Pi 5 first boot
+
+In Astro Bridge Setup, the optional private Wi-Fi step stores your network, its password and your country on the card for the first boot only: the first boot moves them to the data partition (the password as a derived WPA key) and erases them from the card's reserved area. The onboard radio then joins your network and a free USB Wi-Fi adapter carries the hotspot.
+
+Without private Wi-Fi, the onboard radio carries the hotspot. If it stops, the bridge restarts it, and moves it to a free USB Wi-Fi adapter when the onboard radio keeps failing. The welcome screen shows two codes (Wi-Fi, then web interface) while the hotspot works, and otherwise says why in plain words. An Ethernet cable to your router also gives access: the welcome screen then shows the bridge's address.
+
+To check from the local console (`root`): `rc-service wifi-bridge-ap status`, `tail /var/log/wifi-bridge.log /var/log/wifi-bridge-ap.log`, `iw dev`, `nmcli device`.
+
 ## Local console and SSH
 
 No image contains a password or password hash: accounts receive the documented initial password `12345678` on the first boot, and every new password is kept on the data partition.
 
 - **Raspberry Pi Zero W:** sign in as `bridge` (initial password `12345678`, administrator through `sudo`), on the HDMI console or by SSH. `root` is locked at every boot. Change the password from the web interface (Settings) or with `passwd`, then keep it with `sudo /usr/bin/python3 /usr/libexec/astro-bridge-persist save-password`.
-- **Raspberry Pi 5:** the console administrator is `root` (initial password `12345678`; SSH is not enabled). Change it with `passwd`, then keep it with `rc-service astro-console-account save` (also done at a clean shutdown). If its saved state is unusable, `root` stays locked.
+- **Raspberry Pi 5:** the console administrator is `root` (initial password `12345678`). SSH (port 22) starts at every boot with a host key kept on the data partition. It accepts `root` with a public key placed in `/var/lib/wifi-bridge/ssh/authorized_keys`, and with the `root` password only once you have replaced the initial one: the initial password never opens a network login. `ssh-copy-id root@<bridge address>` adds a key: `/root/.ssh/authorized_keys` points to that kept file, so the key stays after a restart. Change it with `passwd`, then keep it with `rc-service astro-console-account save` (also done at a clean shutdown). If its saved state is unusable, `root` stays locked.
 
 Change the initial password on the first sign-in, and keep the board physically secure: the local console is the recovery path.
 

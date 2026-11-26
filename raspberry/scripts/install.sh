@@ -31,7 +31,7 @@ install -d -m 700 "$TARGET_ROOT/etc/wifi-bridge" "$TARGET_ROOT/var/lib/wifi-brid
 install -d -m 755 "$TARGET_ROOT/etc/NetworkManager/system-connections" "$TARGET_ROOT/etc/avahi/services" "$TARGET_ROOT/etc/systemd/system" "$TARGET_ROOT/etc/sysctl.d"
 install -m 644 "$PROJECT_DIR/systemd/wifi-bridge.service" "$PROJECT_DIR/systemd/wifi-bridge-ap.service" "$PROJECT_DIR/systemd/wifi-bridge-dhcp.service" "$PROJECT_DIR/systemd/wifi-bridge-password.service" "$TARGET_ROOT/etc/systemd/system/"
 install -m 644 "$PROJECT_DIR/systemd/wifi-bridge-http.service" "$TARGET_ROOT/etc/avahi/services/"
-echo 'net.ipv4.ip_forward=1' > "$TARGET_ROOT/etc/sysctl.d/80-wifi-bridge.conf"
+printf '%s\n' 'net.ipv4.ip_forward=1' 'net.ipv4.conf.all.arp_ignore=1' > "$TARGET_ROOT/etc/sysctl.d/80-wifi-bridge.conf"
 BOOT_DIR="$TARGET_ROOT/boot/firmware"
 [ -d "$BOOT_DIR" ] || BOOT_DIR="$TARGET_ROOT/boot"
 mkdir -p "$BOOT_DIR"
@@ -58,6 +58,7 @@ else
   if [ "$START" = 1 ]; then
     rfkill unblock wifi
     sysctl -w net.ipv4.ip_forward=1
+    sysctl -w net.ipv4.conf.all.arp_ignore=1
     systemctl daemon-reload
     systemctl start NetworkManager avahi-daemon
     systemctl start astro-bridge-update-check.timer

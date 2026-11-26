@@ -10,7 +10,8 @@ name: Release builds (manual)
 #   astro-bridge-<version>-alpine-armhf-standard.img.xz with its manifests,
 #   OTA, Docker installers and corresponding OS sources
 #   astro-bridge-<version>-alpine-aarch64-pi5.img.xz with pi5-manifest.json
-#   astro-bridge-setup-manifest.json
+#   drivers-catalog.json (the bridge's camera driver catalog, from the Core wheel)
+#   astro-bridge-setup-manifest.json and astro-bridge-setup-manifest-2.json
 #
 # The steps live in .github/actions so that every build runs the same commands.
 # The macOS Setup is built, signed (Developer ID) and notarized by a

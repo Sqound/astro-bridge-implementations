@@ -9,4 +9,6 @@ subprocess.run(['/usr/sbin/chpasswd'], input='bridge:' + password + '\n', text=T
 Path('/etc/sudoers.d/bridge').write_text('bridge ALL=(ALL:ALL) ALL\n')
 Path('/etc/sudoers.d/bridge').chmod(0o440)
 Path('/etc/ssh/sshd_config.d').mkdir(exist_ok=True)
-Path('/etc/ssh/sshd_config.d/astro-bridge.conf').write_text('PermitRootLogin no\nPasswordAuthentication yes\n')
+# Closed until the SSH rule runs at boot (astro-bridge-persist ssh): the password
+# of bridge opens SSH only once it is not the initial one.
+Path('/etc/ssh/sshd_config.d/astro-bridge.conf').write_text('PermitRootLogin no\nAllowUsers bridge\nPasswordAuthentication no\n')

@@ -25,13 +25,23 @@ runs:
       run: |
         set -euo pipefail
         version=$(cat VERSION)
+        # The bridge's own driver catalog, when published beside the images; without it
+        # format 2 announces no camera drivers (the password and Wi-Fi still apply).
+        catalog=()
+        if [ -f dist-images/drivers-catalog.json ]; then catalog=(--drivers-catalog dist-images/drivers-catalog.json); fi
+        # Release 1.2.0 and later publish it (image-pi-5 writes it from the Core wheel).
+        if [ "${#catalog[@]}" -eq 0 ] && [ -f tools/drivers-catalog-asset.py ]; then echo 'drivers-catalog.json is missing from the image artifacts' >&2; exit 1; fi
         python tools/setup-manifest.py --output dist-images/astro-bridge-setup-manifest.json \
+          --output-2 dist-images/astro-bridge-setup-manifest-2.json "${catalog[@]}" \
           "pi-zero-w=dist-images/astro-bridge-$version-alpine-armhf-standard.img.xz" \
           "pi-5=dist-images/astro-bridge-$version-alpine-aarch64-pi5.img.xz" docker=dist-images/install-docker.sh
         cat dist-images/astro-bridge-setup-manifest.json
     - uses: actions/upload-artifact@v4
       with:
         name: astro-bridge-setup-manifest
-        path: ${{ steps.where.outputs.root }}/dist-images/astro-bridge-setup-manifest.json
+        path: |
+          ${{ steps.where.outputs.root }}/dist-images/astro-bridge-setup-manifest.json
+          ${{ steps.where.outputs.root }}/dist-images/astro-bridge-setup-manifest-2.json
+          ${{ steps.where.outputs.root }}/dist-images/drivers-catalog.json
         if-no-files-found: error
         retention-days: ${{ inputs.retention-days }}

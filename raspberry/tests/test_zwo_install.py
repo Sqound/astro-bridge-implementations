@@ -35,14 +35,27 @@ def elf(abi):
     return bytes(data)
 
 
+VERSION = '9.98'
+PREFIX = f'ASI_linux_mac_SDK_V{VERSION}'
+NAME = f'{setup.LIBRARY}.{VERSION}'
+LICENCE = b'Entire synthetic licence\n'
+
+
+def known(abi='x64', binary=None):
+    # A synthetic release added to the reviewed list, as a real one would be.
+    library = hashlib.sha256(binary or elf(abi)).hexdigest()
+    return patch.dict(setup.known_build.__globals__['KNOWN_BUILDS'], {VERSION: {
+        'license_sha256': hashlib.sha256(LICENCE).hexdigest(), 'libraries': {abi: library}}})
+
+
 def archive(path, abi='x64', binary=None, duplicate=False, link=False):
     nested = io.BytesIO()
     with tarfile.open(fileobj=nested, mode='w:bz2') as tar:
-        entries = [('license.txt', b'Entire synthetic licence\n'), (f'lib/{abi}/{setup.LIBRARY}', binary or elf(abi))]
+        entries = [('license.txt', LICENCE), (f'lib/{abi}/{NAME}', binary or elf(abi))]
         if duplicate:
             entries.append(entries[0])
         for name, raw in entries:
-            member = tarfile.TarInfo(f'{setup.PREFIX}/{name}')
+            member = tarfile.TarInfo(f'{PREFIX}/{name}')
             if link and name == 'license.txt':
                 member.type, member.linkname = tarfile.SYMTYPE, '/outside'
                 tar.addfile(member)
@@ -50,13 +63,16 @@ def archive(path, abi='x64', binary=None, duplicate=False, link=False):
                 member.size = len(raw)
                 tar.addfile(member, io.BytesIO(raw))
     with zipfile.ZipFile(path, 'w') as outer:
-        outer.writestr(f'ASI_Camera_SDK/{setup.PREFIX}.tar.bz2', nested.getvalue())
+        outer.writestr(f'ASI_Camera_SDK/{PREFIX}.tar.bz2', nested.getvalue())
+    return 'f' * 64
 
 
 class OwnerInstallTests(unittest.TestCase):
     def test_real_pin_consistency_and_rule_is_narrow(self):
         manifest = json.loads((ROOT/'tools/sdk/manifest.json').read_bytes())['zwo']
-        self.assertEqual((setup.URL, setup.PIN), (manifest['url'], manifest['sha256']))
+        self.assertEqual(setup.URL, manifest['url'])
+        # One reviewed list of SDK builds, shared by the installer and the probes.
+        self.assertEqual(setup.known_build.__globals__['KNOWN_BUILDS'], manifest['known_builds'])
         self.assertEqual(setup.INSTALL, zwo_platform.DIRECTORY)
         table = json.loads((ROOT/'cameras/zwo_asi.json').read_bytes())
         self.assertEqual({(0x03c3, p) for p in setup.PRODUCTS},
@@ -74,29 +90,31 @@ class OwnerInstallTests(unittest.TestCase):
         for abi in setup.ABI.values():
             with self.subTest(abi=abi), tempfile.TemporaryDirectory() as directory:
                 temp = Path(directory)
-                fetch, accept = Mock(side_effect=lambda url, path, pin: archive(path, abi)), Mock(return_value=True)
-                payload = setup.stage(temp, abi, setup.INSTALL, accept, fetch)
-                fetch.assert_called_once_with(setup.URL, temp/'input.zip', setup.PIN)
-                accept.assert_called_once_with(b'Entire synthetic licence\n')
-                self.assertEqual({p.name for p in payload.iterdir()}, {setup.LIBRARY, 'platform.json', 'license.txt', setup.RULE})
+                fetch, accept = Mock(side_effect=lambda url, path: archive(path, abi)), Mock(return_value=True)
+                with known(abi):
+                    payload, version = setup.stage(temp, abi, setup.INSTALL, accept, fetch)
+                self.assertEqual(version, VERSION)
+                fetch.assert_called_once_with(setup.URL, temp/'input.zip')
+                accept.assert_called_once_with(LICENCE, VERSION)
+                self.assertEqual({p.name for p in payload.iterdir()}, {NAME, 'platform.json', 'license.txt', setup.RULE})
                 record = json.loads((payload/'platform.json').read_bytes())
-                self.assertEqual(record, {'path': str(setup.INSTALL/setup.LIBRARY),
+                self.assertEqual(record, {'path': str(setup.INSTALL/NAME),
                                           'sha256': hashlib.sha256(elf(abi)).hexdigest()})
 
     def test_bad_archive_or_abi_cannot_reach_acceptance_or_publish(self):
         for options in ({'link':True}, {'duplicate':True}, {'binary':elf('armv8')}, {'binary':b'abc'}):
             with self.subTest(options=options), tempfile.TemporaryDirectory() as directory:
                 temp, accept = Path(directory), Mock(return_value=True)
-                with self.assertRaises(ValueError):
+                with self.assertRaises(ValueError), known():
                     setup.stage(temp, 'x64', setup.INSTALL, accept,
-                                lambda url,path,pin:archive(path, **options))
+                                lambda url,path:archive(path, **options))
                 accept.assert_not_called()
                 self.assertFalse((temp/'payload/platform.json').exists())
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
-            with self.assertRaisesRegex(ValueError, 'license_not_accepted'):
-                setup.stage(temp, 'x64', setup.INSTALL, lambda licence: False,
-                            lambda url,path,pin:archive(path))
+            with self.assertRaisesRegex(ValueError, 'license_not_accepted'), known():
+                setup.stage(temp, 'x64', setup.INSTALL, lambda licence, version: False,
+                            lambda url,path:archive(path))
             self.assertFalse((temp/'payload/platform.json').exists())
 
     def test_platform_gates_without_reading_the_host(self):
@@ -163,26 +181,29 @@ class OwnerInstallTests(unittest.TestCase):
     def test_atomic_publication_retry_foreign_rule_and_decline(self):
         with tempfile.TemporaryDirectory() as directory:
             state = Path(directory)
-            install, link = state/'camera-drivers/zwo-1.41', state/'udev.rules'
+            install, link = state/'camera-drivers/zwo', state/'udev.rules'
             # No command, network, real platform or privilege. Exercise the same
             # staging, atomic publication, conflict and retry paths as the CLI.
             stage = setup.stage
             def fake_stage(temp, abi, destination, accept):
-                return stage(temp, abi, destination, accept, lambda url,path,pin:archive(path))
+                return stage(temp, abi, destination, accept, lambda url,path:archive(path))
             with patch.object(setup, 'STATE', state), patch.object(setup,'INSTALL',install), \
                  patch.object(setup,'RULE_LINK',link), patch.object(setup,'preflight',return_value='x64'), \
                  patch.object(setup,'safe_directory'), patch.object(setup,'stage',side_effect=fake_stage), \
                  patch.object(setup.subprocess,'run') as cmd:
+                stack = ExitStack()
+                self.addCleanup(stack.close)
+                stack.enter_context(known())
                 with self.assertRaisesRegex(ValueError, 'license_not_accepted'):
-                    setup.install('docker-linux', 'x64', lambda _:False)
+                    setup.install('docker-linux', 'x64', lambda *_:False)
                 self.assertEqual(list(state.iterdir()), [])
                 link.write_text('existing unrelated rule')
                 with self.assertRaisesRegex(ValueError, 'existing_rule_conflict'):
-                    setup.install('docker-linux','x64',lambda _:True)
+                    setup.install('docker-linux','x64',lambda *_:True)
                 self.assertEqual(link.read_text(), 'existing unrelated rule')
                 self.assertFalse(install.exists())
                 link.unlink()
-                setup.install('docker-linux', 'x64', lambda _:True)
+                setup.install('docker-linux', 'x64', lambda *_:True)
                 self.assertEqual(link.read_bytes(), setup.rule_bytes())
                 self.assertEqual(cmd.call_args.args[0], ['udevadm', 'control', '--reload-rules'])
                 # Reconcile against the fixture owner's UID as though installed by root.
@@ -192,19 +213,24 @@ class OwnerInstallTests(unittest.TestCase):
                     data[4] = 0
                     return os.stat_result(data)
                 with patch.object(Path, 'lstat', synthetic_owner):
-                    setup.install('docker-linux', 'x64', lambda _:True)
-                    (install/setup.LIBRARY).write_bytes(b'changed')
-                    with self.assertRaisesRegex(ValueError, 'existing_installation_differs'):
-                        setup.install('docker-linux', 'x64', lambda _:True)
+                    self.assertEqual(setup.install('docker-linux', 'x64', lambda *_:True), VERSION)
+                    # A changed or older installation is replaced by the accepted build.
+                    (install/NAME).write_bytes(b'changed')
+                    setup.install('docker-linux', 'x64', lambda *_:True)
+                    self.assertEqual((install/NAME).read_bytes(), elf('x64'))
                 self.assertFalse(list(state.glob('.asi-setup-*')))
 
     def test_loading_requires_private_ancestry_regular_hash_and_exact_declared_path(self):
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
-            dest = temp/'platform'
-            dest.mkdir()
-            lib = dest/setup.LIBRARY
+            # An installation made by an earlier installer keeps its versioned folder.
+            drivers = temp/'drivers'
+            dest = drivers/'zwo-1.41'
+            dest.mkdir(parents=True)
+            lib = dest/'libASICamera2.so.1.41'
             lib.write_bytes(elf('x64'))
+            def declared(_):
+                return zwo_platform.declared_path(drivers)
             digest = hashlib.sha256(lib.read_bytes()).hexdigest()
             original = Path.lstat
             def fixture(path):
@@ -217,19 +243,19 @@ class OwnerInstallTests(unittest.TestCase):
             record = dest/'platform.json'
             record.write_text(json.dumps({'path': str(lib), 'sha256': digest}))
             with patch.object(Path, 'lstat', fixture):
-                self.assertEqual(zwo_platform.declared_path(dest),lib)
+                self.assertEqual(declared(dest),lib)
                 record.write_text(json.dumps({'path': '/tmp/untrusted', 'sha256':digest}))
                 with self.assertRaisesRegex(CameraError, 'camera_driver_unavailable'):
-                    zwo_platform.declared_path(dest)
+                    declared(dest)
                 record.write_text(json.dumps({'path': str(lib), 'sha256':digest}))
                 lib.chmod(0o666)
                 with self.assertRaises(CameraError):
-                    zwo_platform.declared_path(dest)
+                    declared(dest)
                 lib.chmod(0o600)
                 lib.write_bytes(b'changed')
                 with self.assertRaises(CameraError):
-                    zwo_platform.declared_path(dest)
+                    declared(dest)
                 lib.unlink()
                 lib.symlink_to(record)
                 with self.assertRaises(CameraError):
-                    zwo_platform.declared_path(dest)
+                    declared(dest)

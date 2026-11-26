@@ -35,9 +35,9 @@ jobs:
         shell: bash
         run: |
           if [ "$RUNNER_OS" = Linux ]; then
-            xvfb-run -a python tools/build-flasher.py --wheel build/core/astro_bridge_core-1.1.0-py3-none-any.whl
+            xvfb-run -a python tools/build-flasher.py --wheel build/core/astro_bridge_core-1.2.0-py3-none-any.whl
           else
-            python tools/build-flasher.py --wheel build/core/astro_bridge_core-1.1.0-py3-none-any.whl
+            python tools/build-flasher.py --wheel build/core/astro_bridge_core-1.2.0-py3-none-any.whl
           fi
       - name: Upload only to the matching draft release
         shell: bash

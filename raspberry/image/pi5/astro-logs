@@ -1,0 +1,33 @@
+#!/sbin/openrc-run
+# Keep the logs of this boot and of the three before it on the data partition,
+# so that a cut followed by a restart still leaves its trace. Without the data
+# partition, or with little room left on it, the logs stay in memory as before.
+name="Astro Bridge logs on the data partition"
+depend() { after astro-data; before syslog klogd networkmanager wifi-bridge; }
+LOGS=/media/mmcblk0p2/logs
+KEEP_KB=8192
+MIN_FREE_KB=262144
+start() {
+    awk '$1 == "/dev/mmcblk0p2" && $2 == "/media/mmcblk0p2" && $4 ~ /(^|,)rw(,|$)/ {ok=1} END {exit !ok}' /proc/mounts || return 0
+    if awk '$2 == "/var/log" {found=1} END {exit !found}' /proc/mounts; then return 0; fi
+    [ ! -L "$LOGS" ] || return 0
+    mkdir -p "$LOGS" && chmod 700 "$LOGS" || return 0
+    local free
+    free=$(df -k /media/mmcblk0p2 | awk 'NR == 2 {print $4}')
+    [ -n "$free" ] && [ "$free" -ge "$MIN_FREE_KB" ] || { ewarn "Little room on the data partition: logs stay in memory"; return 0; }
+    rm -rf "$LOGS/previous-3"
+    [ -d "$LOGS/previous-2" ] && mv "$LOGS/previous-2" "$LOGS/previous-3"
+    [ -d "$LOGS/previous-1" ] && mv "$LOGS/previous-1" "$LOGS/previous-2"
+    [ -d "$LOGS/current" ] && mv "$LOGS/current" "$LOGS/previous-1"
+    # An earlier boot keeps at most its last 8 MB per file.
+    if [ -d "$LOGS/previous-1" ]; then
+        find "$LOGS/previous-1" -type f -size +${KEEP_KB}k | while read -r file; do
+            tail -c $((KEEP_KB * 1024)) "$file" > "$file.part" && mv "$file.part" "$file"
+        done
+    fi
+    mkdir -p "$LOGS/current" && chmod 700 "$LOGS/current" || return 0
+    # What this boot already wrote in memory comes along.
+    cp -a /var/log/. "$LOGS/current/" 2>/dev/null
+    mount --bind "$LOGS/current" /var/log || { ewarn "Logs stay in memory"; return 0; }
+    return 0
+}

@@ -10,7 +10,7 @@ class NetworkBoot(unittest.TestCase):
   with tempfile.TemporaryDirectory() as d:
    root=pathlib.Path(d); (root/'etc/init.d').mkdir(parents=True)
    recipe.install_network_boot(root)
-   self.assertEqual((root/'etc/sysctl.d/80-wifi-bridge.conf').read_text(),'net.ipv4.ip_forward=1\n')
+   self.assertEqual((root/'etc/sysctl.d/80-wifi-bridge.conf').read_text(),'net.ipv4.ip_forward=1\nnet.ipv4.conf.all.arp_ignore=1\n')
    rule=root/'etc/udev/rules.d/39-astro-realtek-switch.rules'
    self.assertEqual(rule.read_bytes(),(HERE/rule.name).read_bytes())
    self.assertEqual(rule.stat().st_mode & 0o777,0o644)
@@ -35,4 +35,10 @@ class NetworkBoot(unittest.TestCase):
   for match in ('idVendor=0bda','idProduct=1a2b','bcdDevice=0200','manufacturer=Realtek','product=DISK'): self.assertIn('--attr-match='+match,service)
   self.assertIn('udevadm settle --timeout=10 || :',service)
   self.assertLess(service.index('--subsystem-match=usb'),service.index('--subsystem-match=net'))
+ def test_onboard_ethernet_replay_never_blocks_boot(self):
+  service=(HERE/'astro-target-udev').read_text()
+  line=next(l for l in service.splitlines() if '--sysname-match=eth0' in l)
+  self.assertTrue(line.rstrip().endswith('|| :;;'))
+  self.assertLess(service.index('--sysname-match=wlan0'),service.index('--sysname-match=eth0'))
+  self.assertLess(service.index('--sysname-match=eth0'),service.rindex('udevadm settle'))
 if __name__=='__main__': unittest.main()

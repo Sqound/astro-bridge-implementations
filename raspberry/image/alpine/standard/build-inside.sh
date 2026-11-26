@@ -44,6 +44,8 @@ archive="$1"
 image="$job/candidate.img"
 truncate -s 1536M "$image"
 parted -s "$image" mklabel msdos mkpart primary fat32 1MiB 513MiB mkpart primary ext4 513MiB 100% set 1 boot on
+# First-boot zone before the first partition, read by astro-bridge-persist (image/common/astro_seed.py).
+python3 "$helper" reserve-seed "$image"
 boot_loop= data_loop=
 cleanup() {
   set +e

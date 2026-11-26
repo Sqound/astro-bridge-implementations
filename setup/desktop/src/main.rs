@@ -1,5 +1,8 @@
 mod launch;
-use astro_bridge_setup_catalog::{Catalog, ReleaseArtifact, Target};
+use astro_bridge_setup_catalog::{
+    drivers::{DriverFetcher, DriverOffer, Failure},
+    Catalog, ReleaseArtifact, Target,
+};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -38,6 +41,28 @@ struct Session {
     release: Option<ReleaseArtifact>,
     download: Option<PathBuf>,
     media: HashMap<String, Disk>,
+    /// Camera driver lines of the release being written, and the catalog version they come from.
+    drivers: Option<(String, Vec<DriverOffer>)>,
+    /// Verified driver archives in the cache, by manufacturer.
+    driver_files: HashMap<String, PathBuf>,
+}
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DriverPanel {
+    supported: bool,
+    offers: Vec<DriverOffer>,
+}
+#[derive(Clone, Serialize)]
+struct DriverProgress {
+    id: String,
+    received: u64,
+    total: u64,
+}
+#[derive(Serialize)]
+struct DriverOutcome {
+    id: String,
+    /// ready, offline, failed or changed.
+    outcome: String,
 }
 struct App {
     session: Mutex<Session>,
@@ -143,6 +168,8 @@ async fn resolve_release(
     session.release = None;
     session.download = None;
     session.media.clear();
+    session.drivers = None;
+    session.driver_files.clear();
     let target = Target::from_str(&target).map_err(err)?;
     let release =
         match astro_bridge_setup_catalog::local_candidate(&app.resources, target).map_err(err)? {
@@ -292,11 +319,125 @@ impl WifiSeed {
             && self.country.bytes().all(|b| b.is_ascii_uppercase())
     }
 }
+/// Images whose release announces the first-boot Wi-Fi slot (every published Pi 5
+/// image, and any image of a format 2 manifest that says so). The helper verifies
+/// the slot again in the image bytes before writing.
+fn wifi_allowed(wifi: &WifiSeed, source: &str, wifi_seed: bool) -> bool {
+    wifi.valid() && wifi_seed && matches!(source, "published" | "local-test")
+}
+/// The bridge rule: 8 to 63 printable ASCII characters without space, and not 12345678.
+fn bridge_password_valid(password: &str) -> bool {
+    (8..=63).contains(&password.len())
+        && password.bytes().all(|b| (0x21..=0x7e).contains(&b))
+        && password != "12345678"
+}
 #[tauri::command]
+async fn driver_offers(app: State<'_, App>) -> Result<DriverPanel, String> {
+    let mut session = app.session.lock().await;
+    let artifact = session.release.clone().ok_or("Resolve the release first")?;
+    if !artifact.driver_drop {
+        return Err("This release does not carry camera drivers".into());
+    }
+    if !artifact.camera_service {
+        session.drivers = Some((String::new(), Vec::new()));
+        return Ok(DriverPanel {
+            supported: false,
+            offers: Vec::new(),
+        });
+    }
+    let catalog = if artifact.source == "local-test" {
+        astro_bridge_setup_catalog::drivers::local_catalog(&app.resources).map_err(err)?
+    } else {
+        Catalog::new()
+            .map_err(err)?
+            .drivers_catalog(&artifact)
+            .await
+            .map_err(err)?
+    }
+    .ok_or("Missing driver catalog")?;
+    let arch = artifact
+        .driver_arch
+        .clone()
+        .ok_or("Missing processor architecture")?;
+    let offers = astro_bridge_setup_catalog::drivers::offers(&catalog, &arch);
+    session.drivers = Some((catalog.catalog_version.clone(), offers.clone()));
+    Ok(DriverPanel {
+        supported: true,
+        offers,
+    })
+}
+#[tauri::command]
+async fn download_drivers(
+    ids: Vec<String>,
+    on_progress: Channel<DriverProgress>,
+    app: State<'_, App>,
+) -> Result<Vec<DriverOutcome>, String> {
+    let mut session = app.session.lock().await;
+    let offers = session
+        .drivers
+        .as_ref()
+        .ok_or("Read the camera drivers first")?
+        .1
+        .clone();
+    let cache = app.cache.join("drivers");
+    let fetcher = DriverFetcher::default();
+    let mut outcomes = Vec::new();
+    for id in ids {
+        let offer = offers
+            .iter()
+            .find(|o| o.id == id)
+            .ok_or("Unknown camera driver")?;
+        let mut last = std::time::Instant::now() - std::time::Duration::from_secs(1);
+        let report = |received: u64, total: u64| {
+            let now = std::time::Instant::now();
+            if received == total
+                || now.duration_since(last) >= std::time::Duration::from_millis(100)
+            {
+                last = now;
+                let _ = on_progress.send(DriverProgress {
+                    id: offer.id.clone(),
+                    received,
+                    total,
+                });
+            }
+        };
+        let outcome = match fetcher.download(offer, &cache, report).await {
+            Ok(path) => {
+                session.driver_files.insert(id.clone(), path);
+                "ready"
+            }
+            Err(Failure::Offline) => "offline",
+            Err(Failure::Changed) => "changed",
+            Err(Failure::Failed) => "failed",
+        };
+        outcomes.push(DriverOutcome {
+            id,
+            outcome: outcome.into(),
+        });
+    }
+    Ok(outcomes)
+}
+/// Opens the official page of a manufacturer of the catalog being written; never another address.
+#[tauri::command]
+async fn open_licence(id: String, app: State<'_, App>) -> Result<(), String> {
+    let session = app.session.lock().await;
+    let offer = session
+        .drivers
+        .as_ref()
+        .and_then(|(_, offers)| offers.iter().find(|o| o.id == id))
+        .ok_or("Unknown camera driver")?;
+    let url =
+        astro_bridge_setup_catalog::drivers::https_url(&offer.terms_url).ok_or("Invalid page")?;
+    launch::open_url(url.as_str())
+}
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
 async fn flash_media(
     id: String,
     confirmed: bool,
     wifi: Option<WifiSeed>,
+    password: Option<String>,
+    drivers: Option<Vec<String>>,
     on_progress: Channel<Event>,
     app: State<'_, App>,
 ) -> Result<(), String> {
@@ -314,23 +455,58 @@ async fn flash_media(
         return Err("Docker cannot be flashed".into());
     }
     if let Some(ref wifi) = wifi {
-        if !wifi.valid()
-            || artifact.target != Target::Pi5
-            || artifact.source != "local-test"
-            || !artifact.wifi_seed
-        {
+        if !wifi_allowed(wifi, &artifact.source, artifact.wifi_seed) {
             return Err("Wi-Fi setup is unavailable or invalid".into());
         }
-        let current = astro_bridge_setup_catalog::local_candidate(&app.resources, Target::Pi5)
-            .map_err(err)?
-            .ok_or("Local candidate missing")?;
-        if !current.wifi_seed
-            || current.sha256 != artifact.sha256
-            || current.size != artifact.size
-            || current.tag != artifact.tag
-            || current.asset != artifact.asset
-        {
-            return Err("Local candidate changed".into());
+    }
+    if let Some(ref password) = password {
+        if !artifact.password_seed || !bridge_password_valid(password) {
+            return Err("Bridge password is unavailable or invalid".into());
+        }
+    }
+    let drivers = drivers.unwrap_or_default();
+    let mut items = Vec::new();
+    if !drivers.is_empty() {
+        let (catalog_version, offers) = session
+            .drivers
+            .as_ref()
+            .filter(|_| artifact.driver_drop && artifact.camera_service)
+            .ok_or("Camera drivers are unavailable")?;
+        for id in &drivers {
+            let offer = offers
+                .iter()
+                .find(|o| &o.id == id)
+                .ok_or("Unknown camera driver")?;
+            let path = session
+                .driver_files
+                .get(id)
+                .ok_or("Camera driver not downloaded")?;
+            items.push(serde_json::json!({
+                "id": offer.id, "version": offer.version, "arch": offer.arch, "source": offer.source,
+                "path": path, "size": offer.size, "sha256": offer.sha256,
+                "license_sha256": offer.license_sha256, "terms_url": offer.terms_url,
+            }));
+        }
+        if items.is_empty() || catalog_version.is_empty() {
+            return Err("Camera drivers are unavailable".into());
+        }
+        items.insert(0, serde_json::json!(catalog_version));
+    }
+    if wifi.is_some() || password.is_some() || !items.is_empty() {
+        if artifact.source == "local-test" {
+            let current =
+                astro_bridge_setup_catalog::local_candidate(&app.resources, artifact.target)
+                    .map_err(err)?
+                    .ok_or("Local candidate missing")?;
+            if (wifi.is_some() && !current.wifi_seed)
+                || (password.is_some() && !current.password_seed)
+                || current.sha256 != artifact.sha256
+                || current.size != artifact.size
+                || current.tag != artifact.tag
+                || current.asset != artifact.asset
+            {
+                return Err("Local candidate changed".into());
+            }
         }
     }
     let image = session.download.as_ref().ok_or("Download an image first")?;
@@ -338,6 +514,13 @@ async fn flash_media(
         serde_json::json!({"command":"flash","image":image,"sha256":artifact.sha256,"disk":disk});
     if let Some(wifi) = wifi {
         request["wifi"] = serde_json::to_value(wifi).map_err(err)?;
+    }
+    if let Some(password) = password {
+        request["password"] = password.into();
+    }
+    if !items.is_empty() {
+        let version = items.remove(0);
+        request["drivers"] = serde_json::json!({"catalog_version": version, "items": items});
     }
     let helper_path = app.helper.clone();
     let cache = app.cache.clone();
@@ -373,48 +556,70 @@ async fn reveal_download(app: State<'_, App>) -> Result<(), String> {
     }
     Ok(())
 }
+/// One search round at a time; the window starts the next one when this one ends.
+static SCANNING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 #[tauri::command]
 async fn discover_bridges(
     joined_hotspot: bool,
     app: State<'_, App>,
 ) -> Result<Vec<launch::Bridge>, String> {
+    use std::sync::atomic::Ordering;
+    if SCANNING.swap(true, Ordering::AcqRel) {
+        return Err("A search is already running".into());
+    }
     let state = app.launch.clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        state
-            .try_lock()
-            .map_err(|_| "Another bridge operation is in progress")?
-            .discover(joined_hotspot)
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        // The search runs without the lock: choosing, reading and adding keep working meanwhile.
+        let found = launch::scan(joined_hotspot);
+        launch::merge(&state, found)
     })
     .await
-    .map_err(err)?
+    .map_err(err);
+    SCANNING.store(false, Ordering::Release);
+    result
 }
 #[tauri::command]
 async fn add_bridge_ip(address: String, app: State<'_, App>) -> Result<launch::Bridge, String> {
     let state = app.launch.clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        state
-            .try_lock()
-            .map_err(|_| "Another bridge operation is in progress")?
-            .add_manual(&address)
-    })
-    .await
-    .map_err(err)?
+    tauri::async_runtime::spawn_blocking(move || launch::add_manual(&state, &address))
+        .await
+        .map_err(err)?
 }
 #[tauri::command]
-async fn read_bridge(
+async fn unlock_bridge(
     id: String,
     password: String,
     app: State<'_, App>,
-) -> Result<launch::BridgeState, String> {
+) -> Result<launch::BridgeDetails, String> {
     let state = app.launch.clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        state
-            .try_lock()
-            .map_err(|_| "Another bridge operation is in progress")?
-            .read(&id, &password)
-    })
-    .await
-    .map_err(err)?
+    tauri::async_runtime::spawn_blocking(move || launch::unlock(&state, &id, &password))
+        .await
+        .map_err(err)?
+}
+#[tauri::command]
+async fn refresh_bridge(id: String, app: State<'_, App>) -> Result<launch::BridgeDetails, String> {
+    let state = app.launch.clone();
+    tauri::async_runtime::spawn_blocking(move || launch::refresh(&state, &id))
+        .await
+        .map_err(err)?
+}
+#[tauri::command]
+async fn forget_bridge_session(app: State<'_, App>) -> Result<(), String> {
+    let state = app.launch.clone();
+    tauri::async_runtime::spawn_blocking(move || launch::forget(&state))
+        .await
+        .map_err(err)
+}
+#[tauri::command]
+async fn add_bridge_device(
+    id: String,
+    device: String,
+    app: State<'_, App>,
+) -> Result<launch::AddOutcome, String> {
+    let state = app.launch.clone();
+    tauri::async_runtime::spawn_blocking(move || launch::add_device(&state, &id, &device))
+        .await
+        .map_err(err)?
 }
 #[tauri::command]
 async fn change_bridge_password(
@@ -426,10 +631,7 @@ async fn change_bridge_password(
 ) -> Result<launch::ChangeResult, String> {
     let state = app.launch.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        state
-            .try_lock()
-            .map_err(|_| "Another bridge operation is in progress")?
-            .change(&id, &current_password, &new_password, &target)
+        launch::change(&state, &id, &current_password, &new_password, &target)
     })
     .await
     .map_err(err)?
@@ -437,14 +639,9 @@ async fn change_bridge_password(
 #[tauri::command]
 async fn open_bridge_ui(id: String, app: State<'_, App>) -> Result<(), String> {
     let state = app.launch.clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        state
-            .try_lock()
-            .map_err(|_| "Another bridge operation is in progress")?
-            .open(&id)
-    })
-    .await
-    .map_err(err)?
+    tauri::async_runtime::spawn_blocking(move || launch::open(&state, &id))
+        .await
+        .map_err(err)?
 }
 fn main() {
     tauri::Builder::default()
@@ -453,6 +650,12 @@ fn main() {
                 if window.state::<App>().session.try_lock().is_err() {
                     api.prevent_close();
                 }
+            }
+            // The bridge token lives only as long as the window: sign out when it goes.
+            // In the background: the window closes at once, the sign-out has its own short timeouts.
+            if let tauri::WindowEvent::Destroyed = event {
+                let state = window.state::<App>().launch.clone();
+                std::thread::spawn(move || launch::forget(&state));
             }
         })
         .setup(|app| {
@@ -485,9 +688,15 @@ fn main() {
             reveal_download,
             discover_bridges,
             add_bridge_ip,
-            read_bridge,
+            unlock_bridge,
+            refresh_bridge,
+            forget_bridge_session,
+            add_bridge_device,
             change_bridge_password,
-            open_bridge_ui
+            open_bridge_ui,
+            driver_offers,
+            download_drivers,
+            open_licence
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Astro Bridge Setup");
@@ -518,6 +727,40 @@ mod tests {
         wifi.password = "password".into();
         wifi.country = "jp".into();
         assert!(!wifi.valid());
+    }
+    #[test]
+    fn wifi_is_offered_only_for_images_that_announce_it() {
+        let wifi = WifiSeed {
+            ssid: "Home".into(),
+            password: "password".into(),
+            hidden: false,
+            country: "FR".into(),
+        };
+        // Same panel on every hardware: the release says whether its image reads the slot.
+        assert!(wifi_allowed(&wifi, "published", true));
+        assert!(wifi_allowed(&wifi, "local-test", true));
+        assert!(!wifi_allowed(&wifi, "local-test", false));
+        assert!(!wifi_allowed(&wifi, "published", false));
+        assert!(!wifi_allowed(&wifi, "other", true));
+        let invalid = WifiSeed {
+            country: "fr".into(),
+            ..wifi
+        };
+        assert!(!wifi_allowed(&invalid, "published", true));
+    }
+    #[test]
+    fn bridge_password_follows_the_bridge_rule() {
+        assert!(bridge_password_valid("Synthetic-1"));
+        assert!(bridge_password_valid(&"a".repeat(63)));
+        for bad in [
+            "short",
+            "12345678",
+            "with space",
+            "étoile2026",
+            &"a".repeat(64),
+        ] {
+            assert!(!bridge_password_valid(bad), "{bad}");
+        }
     }
     fn fixture(body: &str) -> PathBuf {
         let path = std::env::temp_dir().join(format!("setup-test-{}", uuid::Uuid::new_v4()));

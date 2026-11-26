@@ -42,6 +42,9 @@ install -m 755 "$PROJECT"/image/alpine/openrc/astro-bridge-provision "$tmp/etc/i
 python3 "$PROJECT/scripts/install-push-runtime.py" --vapid-only "$tmp/usr/lib/astro-bridge-push/vapid"
 install -m 755 "$PROJECT"/scripts/tls.py "$tmp/usr/libexec/astro-bridge-tls"
 install -m 755 "$PROJECT"/image/alpine/persistence.py "$tmp/usr/libexec/astro-bridge-persist"
+install -m 644 "$PROJECT"/image/common/astro_ssh_rule.py "$tmp/usr/libexec/astro_ssh_rule.py"
+# The first-boot zone reader shared with the Pi 5 image (Wi-Fi, bridge password, camera drivers).
+install -m 644 "$PROJECT"/image/common/astro_seed.py "$tmp/usr/libexec/astro_seed.py"
 install -m 755 "$PROJECT"/image/alpine/standard/clock-checkpoint "$tmp/etc/periodic/hourly/astro-bridge-clock"
 install -m 644 "$PROJECT"/systemd/wifi-bridge-http.service "$tmp/etc/avahi/services/"
 
@@ -51,17 +54,21 @@ printf '%s\n' 2 > "$tmp/etc/wifi-bridge/tls-helper-version"
 printf '%s\n' diskless > "$tmp/etc/wifi-bridge/diskless"
 printf '%s\n' 'rc_need="astro-bridge-provision"' 'sshd_disable_keygen="yes"' > "$tmp/etc/conf.d/sshd"
 printf '%s\n' 'rc_need="modules"' > "$tmp/etc/conf.d/sysctl"
-printf '%s\n' 'PermitRootLogin no' 'PasswordAuthentication yes' > "$tmp/etc/ssh/sshd_config.d/astro-bridge.conf"
+# Closed until astro-bridge-provision applies the SSH rule at each boot: the
+# password of bridge opens SSH only once it is not the initial one.
+printf '%s\n' 'PermitRootLogin no' 'AllowUsers bridge' 'PasswordAuthentication no' 'KbdInteractiveAuthentication no' > "$tmp/etc/ssh/sshd_config.d/astro-bridge.conf"
 ln -s /bin/busybox "$tmp/usr/sbin/rfkill"
 # The owner installer writes this narrow rule on ASTRO_DATA only after acceptance.
-ln -s /var/lib/wifi-bridge/camera-drivers/zwo-1.41/70-astro-bridge-asi.rules \
+ln -s /var/lib/wifi-bridge/camera-drivers/zwo/70-astro-bridge-asi.rules \
   "$tmp/etc/udev/rules.d/70-astro-bridge-asi.rules"
+# One link per manufacturer of the driver catalog, to the rule its installed driver writes.
+python3 "$PROJECT/image/common/camera_udev.py" "$PROJECT/cameras/catalog/drivers-catalog.json" "$tmp"
 printf '%s\n' openrc > "$tmp/etc/wifi-bridge/init-system"
 printf '%s\n' '{"password":"12345678"}' > "$tmp/etc/wifi-bridge/bootstrap.json"
 chmod 600 "$tmp/etc/wifi-bridge/bootstrap.json"
 printf '%s\n' '127.0.0.1 localhost astro-bridge-alpine' '::1 localhost' > "$tmp/etc/hosts"
 printf '%s\n' astro-bridge-alpine > "$tmp/etc/hostname"
-printf '%s\n' 'net.ipv4.ip_forward=1' > "$tmp/etc/sysctl.d/80-wifi-bridge.conf"
+printf '%s\n' 'net.ipv4.ip_forward=1' 'net.ipv4.conf.all.arp_ignore=1' > "$tmp/etc/sysctl.d/80-wifi-bridge.conf"
 printf '%s\n' 'brcmfmac' 'ipv6' > "$tmp/etc/modules"
 
 printf '%s\n' \

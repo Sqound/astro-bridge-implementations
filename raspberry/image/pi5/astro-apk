@@ -1,0 +1,39 @@
+#!/bin/sh
+# apk for a person at the console of the Astro Bridge Pi 5 image.
+#
+# The bridge runtime is installed at every boot from the data partition as
+# virtual packages (.astro-bridge-runtime and the optional ones), and the base
+# world is restored right after so a saved overlay never names them. A plain
+# "apk add tool" then solves the world without them and removes the runtime
+# from memory. This wrapper adds the installed runtime packages to the world
+# for the time of one change, keeps what the person added for the next change
+# (in /run, never saved), and restores the base world afterwards.
+# The variables only serve the repository tests; the image uses the defaults.
+root=${ASTRO_APK_ROOT:-}
+real=${ASTRO_APK_REAL:-/sbin/apk}
+base=$root/etc/wifi-bridge/base-world
+world=$root/etc/apk/world
+extra=$root/run/astro-apk-added
+sub=
+for arg in "$@"; do
+    case "$arg" in -*) ;; *) sub=$arg; break ;; esac
+done
+case "$sub" in
+    add|del|fix|upgrade) ;;
+    *) exec "$real" "$@" ;;
+esac
+[ -f "$base" ] || exec "$real" "$@"
+{
+    cat "$base"
+    [ ! -f "$extra" ] || cat "$extra"
+    for name in .astro-bridge-runtime .astro-display .astro-camera .astro-gphoto; do
+        "$real" info -e "$name" >/dev/null 2>&1 && printf '%s\n' "$name"
+    done
+} | sort -u > "$world.astro" && mv "$world.astro" "$world" || exit 1
+"$real" "$@"
+status=$?
+# What the person added beyond the base and the runtime, for the next change only.
+grep -vxF -f "$base" "$world" | grep -v '^\.astro-' > "$extra.tmp" 2>/dev/null
+mv "$extra.tmp" "$extra" 2>/dev/null
+cp "$base" "$world"
+exit "$status"

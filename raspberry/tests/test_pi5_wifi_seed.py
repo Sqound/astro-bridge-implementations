@@ -44,12 +44,14 @@ class SeedTests(unittest.TestCase):
         assembly = importlib.util.module_from_spec(spec); spec.loader.exec_module(assembly)
         with tempfile.TemporaryDirectory() as tmp:
             image = Path(tmp)/'image'
-            with image.open('wb') as f: f.truncate(assembly.SEED_OFFSET + assembly.SEED_SIZE)
+            # The blank zone and, right after it, the version 2 reader mark.
+            with image.open('wb') as f: f.truncate(assembly.SEED_OFFSET + 2*assembly.SEED_SIZE)
             assembly.assert_seed_blank(image)
             with image.open('r+b') as f: assembly.reserve_seed(f)
             with image.open('rb') as f:
                 f.seek(assembly.SEED_OFFSET)
                 self.assertEqual(f.read(assembly.SEED_SIZE), firstboot.SEED_MAGIC + bytes(firstboot.SEED_SIZE-len(firstboot.SEED_MAGIC)))
+                self.assertEqual(f.read(assembly.SEED_SIZE), firstboot.astro_seed.reader_block())
             with self.assertRaises(ValueError): assembly.assert_seed_blank(image)
 
     def test_slot_marker_layout_validation_and_clear(self):
@@ -157,7 +159,9 @@ class SeedTests(unittest.TestCase):
                     return original(path, value)
                 with patch.object(firstboot, 'atomic_json', side_effect=interrupted):
                     with self.assertRaises(OSError): firstboot.main()
-                with image.open('rb') as f: self.assertNotEqual(firstboot.seed_slot(f,size), firstboot.SEED_MAGIC + bytes(firstboot.SEED_SIZE-len(firstboot.SEED_MAGIC)))
+                # The durable transaction holds derived values only, so the zone is erased before
+                # the identity is applied (it may hold the bridge password); the resume needs only the transaction.
+                with image.open('rb') as f: self.assertEqual(firstboot.seed_slot(f,size), firstboot.SEED_MAGIC + bytes(firstboot.SEED_SIZE-len(firstboot.SEED_MAGIC)))
                 firstboot.main()
                 self.assertEqual(json.loads((state/'config.json').read_text()), config)
                 self.assertEqual(json.loads((state/'bootstrap.json').read_text()), pending['bootstrap'])

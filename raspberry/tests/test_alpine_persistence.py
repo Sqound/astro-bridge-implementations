@@ -93,7 +93,8 @@ class PersistenceTests(unittest.TestCase):
         # Simulate loss of all RAM account/key files, retaining only ASTRO_DATA.
         (self.root / 'etc/passwd').write_text('root:x:0:0:root:/root:/bin/ash\n')
         (self.root / 'etc/shadow').write_text('root:!:1:0:99999:7:::\n')
-        for file in (self.root / 'etc/ssh').iterdir(): file.unlink()
+        for file in (self.root / 'etc/ssh').iterdir():
+            if file.is_file() or file.is_symlink(): file.unlink()  # sshd_config.d belongs to the image
         self.commands.clear(); self.helper.boot()
         self.assertEqual(self.helper.shadow_hash(), changed)
         self.assertEqual((self.root / 'etc/ssh/ssh_host_ed25519_key').read_bytes(), original)
@@ -226,7 +227,8 @@ class PersistenceTests(unittest.TestCase):
         key=self.state/'identity/ssh/ssh_host_ed25519_key'
         original=key.read_bytes()
         (key.parent/(key.name+'.pub')).unlink()
-        for file in (self.root/'etc/ssh').iterdir(): file.unlink()
+        for file in (self.root/'etc/ssh').iterdir():
+            if file.is_file() or file.is_symlink(): file.unlink()  # sshd_config.d belongs to the image
         self.helper.boot()
         self.assertEqual(key.read_bytes(),original)
         self.assertTrue((self.root/'etc/ssh'/key.name).is_file())
@@ -234,10 +236,68 @@ class PersistenceTests(unittest.TestCase):
         expected=subprocess.run(['ssh-keygen','-y','-f',str(key)],check=True,capture_output=True).stdout
         self.assertEqual((self.root/'etc/ssh'/(key.name+'.pub')).read_bytes(),expected)
         # Invalid persistent keys fail before creating any runtime link.
-        for file in (self.root/'etc/ssh').iterdir(): file.unlink()
+        for file in (self.root/'etc/ssh').iterdir():
+            if file.is_file() or file.is_symlink(): file.unlink()  # sshd_config.d belongs to the image
         self.secret_file(key,'not a valid private key')
         with self.assertRaises(subprocess.CalledProcessError): self.helper.boot()
-        self.assertFalse(list((self.root/'etc/ssh').iterdir()))
+        self.assertFalse([f for f in (self.root/'etc/ssh').iterdir() if f.name != 'sshd_config.d'])
+
+    @staticmethod
+    def crypt(password, salt):
+        # A stand-in for the system hash: deterministic, 86 characters, salt-dependent.
+        import hashlib
+        return '$6$' + salt + '$' + (hashlib.sha512((salt + password).encode()).hexdigest() * 2)[:86]
+
+    def set_bridge_hash(self, value):
+        shadow = self.root / 'etc/shadow'
+        lines = [l for l in shadow.read_text().splitlines() if not l.startswith('bridge:')]
+        shadow.write_text('\n'.join(lines + ['bridge:' + value + ':1:0:99999:7:::']) + '\n')
+
+    def ssh(self):
+        drop_in = (self.root / 'etc/ssh/sshd_config.d/astro-bridge.conf').read_text()
+        state = json.loads((self.root / 'run/astro-ssh/state.json').read_text())
+        return drop_in, state['password_login']
+
+    def test_ssh_refuses_the_initial_password_and_opens_with_the_owner_one(self):
+        self.helper.crypt = self.crypt
+        self.helper.boot()
+        drop_in, opened = self.ssh()
+        self.assertFalse(opened)
+        self.assertIn('PasswordAuthentication no\n', drop_in)
+        self.assertIn('AllowUsers bridge\n', drop_in); self.assertIn('PermitRootLogin no\n', drop_in)
+        self.set_bridge_hash(self.crypt('12345678', 'saltsalt'))
+        self.assertFalse(self.helper.ssh_access())
+        self.set_bridge_hash(self.crypt('Owner-chosen-77', 'saltsalt'))
+        self.assertTrue(self.helper.ssh_access())
+        drop_in, opened = self.ssh()
+        self.assertTrue(opened)
+        self.assertIn('PasswordAuthentication yes\n', drop_in)
+        self.assertNotIn('Owner-chosen-77', drop_in)
+        self.assertEqual((self.root / 'run/astro-ssh').stat().st_mode & 0o777, 0o700)
+
+    def test_ssh_stays_closed_in_any_doubt(self):
+        self.helper.boot()
+        for value in ('!', '', '$y$j9T$other$scheme', '$6$rounds=5000$salt$' + 'a' * 86):
+            self.set_bridge_hash(value)
+            self.assertFalse(self.helper.ssh_access(), value)
+        self.helper.crypt = lambda password, salt: (_ for _ in ()).throw(OSError('no openssl'))
+        self.set_bridge_hash(self.crypt('Owner-chosen-77', 'saltsalt'))
+        self.assertFalse(self.helper.ssh_access())
+        # A boot that cannot prove the account leaves SSH closed.
+        self.helper.crypt = self.crypt
+        self.helper.ssh_access()
+        self.mountinfo.write_text('')
+        with self.assertRaises(RuntimeError): self.helper.boot()
+        self.assertEqual(self.ssh()[1], False)
+        self.assertIn('PasswordAuthentication no', self.ssh()[0])
+
+    def test_password_change_applies_the_ssh_rule(self):
+        self.helper.boot()
+        self.request('Owner-chosen-77')
+        with patch.object(self.helper, 'ssh_access', wraps=self.helper.ssh_access) as rule:
+            self.helper.change_password()
+        rule.assert_called_once_with()
+        self.assertIn((['/usr/sbin/chpasswd', '-c', 'SHA512'], 'bridge:Owner-chosen-77\n'), self.commands)
 
     def test_cli_has_no_account_root_or_path_override_and_redacts_errors(self):
         # Rejection occurs before trying to touch any live path, even for root CI.

@@ -18,6 +18,10 @@ start() {
         printf '%s\n' 'bridge ALL=(ALL:ALL) ALL' > /etc/sudoers.d/bridge
         chmod 440 /etc/sudoers.d/bridge
     fi
+    if [ ! -f /etc/wifi-bridge/diskless ] && [ -f /usr/libexec/astro-bridge-persist ]; then
+        # Same SSH rule as every image; a failure leaves the closed default in place.
+        /usr/bin/python3 /usr/libexec/astro-bridge-persist ssh || ewarn "ssh_rule_failed"
+    fi
     checkpath -d -m 0700 /var/lib/wifi-bridge/app
     if [ ! -f /var/lib/wifi-bridge/app/wifi_bridge/__init__.py ]; then
         cp -a /opt/wifi-bridge/wifi_bridge /var/lib/wifi-bridge/app/

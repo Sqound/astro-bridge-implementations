@@ -72,13 +72,29 @@ class AlpineOverlayTests(unittest.TestCase):
                 self.assertIn(b'rc_need="astro-bridge-provision"', archive.extractfile("./etc/conf.d/sshd").read())
                 self.assertIn(b'sshd_disable_keygen="yes"', archive.extractfile("./etc/conf.d/sshd").read())
                 self.assertIn(b'PermitRootLogin no', archive.extractfile("./etc/ssh/sshd_config.d/astro-bridge.conf").read())
+                # Closed until the SSH rule runs at boot: the initial password never opens SSH.
+                ssh_default = archive.extractfile("./etc/ssh/sshd_config.d/astro-bridge.conf").read()
+                self.assertIn(b'PasswordAuthentication no', ssh_default)
+                self.assertNotIn(b'PasswordAuthentication yes', ssh_default)
+                self.assertIn(b'AllowUsers bridge', ssh_default)
+                self.assertEqual(archive.extractfile("./usr/libexec/astro_ssh_rule.py").read(),
+                                 (project / "image/common/astro_ssh_rule.py").read_bytes())
                 self.assertFalse(any("/identity/" in name or "ssh_host_" in name for name in archive.getnames()))
+                # The first-boot zone reader beside the persistence helper, which imports it from its own folder.
+                self.assertEqual(archive.extractfile("./usr/libexec/astro_seed.py").read(),
+                                 (project / "image/common/astro_seed.py").read_bytes())
+                # One udev link per catalog manufacturer, to the rule its installed driver writes.
+                import json
+                for entry in json.loads((project / "cameras/catalog/drivers-catalog.json").read_text())["drivers"]:
+                    folder = "zwo" if entry["id"] == "zwo_asi" else entry["id"].replace("_", "-")
+                    self.assertEqual(archive.getmember(f"./etc/udev/rules.d/70-astro-bridge-{folder}.rules").linkname,
+                                     f"/var/lib/wifi-bridge/camera-drivers/{folder}/70-astro-bridge-{folder}.rules")
                 self.assertEqual(archive.getmember("./etc/wifi-bridge/bootstrap.json").mode, 0o600)
                 self.assertEqual(archive.getmember("./etc/init.d/astro-bridge-provision").mode, 0o755)
                 self.assertEqual(archive.getmember("./etc/init.d/wifi-bridge").mode, 0o755)
                 self.assertIn("./opt/wifi-bridge/wifi_bridge/static/i18n.js", archive.getnames())
                 self.assertEqual(archive.getmember('./etc/udev/rules.d/70-astro-bridge-asi.rules').linkname,
-                                 '/var/lib/wifi-bridge/camera-drivers/zwo-1.41/70-astro-bridge-asi.rules')
+                                 '/var/lib/wifi-bridge/camera-drivers/zwo/70-astro-bridge-asi.rules')
                 for rel in ('zwo_asi.py', 'zwo_process.py', 'zwo_platform.py', 'tables/zwo_asi.json'):
                     installed = './opt/wifi-bridge/wifi_bridge/cameras/' + rel
                     self.assertEqual(archive.extractfile(installed).read(), (project/'wifi_bridge/cameras'/rel).read_bytes())

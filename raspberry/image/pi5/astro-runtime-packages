@@ -24,7 +24,7 @@ start() {
     done < "$cache/astro-packages.sha256"
     [ "$#" -gt 0 ] || return 1
     # Every APK remains subject to Alpine's normal signature validation.
-    apk add --network=no --no-cache --force-non-repository --virtual .astro-bridge-runtime "$@"
+    /sbin/apk add --network=no --no-cache --force-non-repository --virtual .astro-bridge-runtime "$@"
     status=$?
     # Diskless boot must continue to restore ONLY the unchanged base world.
     cp /etc/wifi-bridge/base-world /etc/apk/world || return 1

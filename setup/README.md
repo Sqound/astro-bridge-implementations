@@ -107,6 +107,9 @@ cargo test --locked --manifest-path setup/desktop/Cargo.toml
 cargo test --locked --manifest-path setup/catalog/Cargo.toml
 node setup/tests/setup-wifi-browser.mjs
 node setup/tests/setup-launch-ip-browser.mjs
+node setup/tests/setup-first-boot-browser.mjs
+node setup/tests/setup-launch-browser.mjs
+node setup/tests/setup-flash-phases-browser.mjs
 ```
 
 The Tauri build script requires a file under `setup/desktop/bin/` (the helper built above; any placeholder is enough for `cargo test`). Tests use fixtures, mocked disks and a synthetic browser backend. They never download Imager, list real disks or write media.

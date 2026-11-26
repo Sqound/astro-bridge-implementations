@@ -17,7 +17,7 @@ def install_wired_profile(overlay):
 
 def install_network_boot(overlay):
  sysctl=overlay/'etc/sysctl.d/80-wifi-bridge.conf'; sysctl.parent.mkdir(parents=True,exist_ok=True)
- sysctl.write_text('net.ipv4.ip_forward=1\n'); sysctl.chmod(0o644)
+ sysctl.write_text('net.ipv4.ip_forward=1\nnet.ipv4.conf.all.arp_ignore=1\n'); sysctl.chmod(0o644)
  rule=overlay/'etc/udev/rules.d/39-astro-realtek-switch.rules'; rule.parent.mkdir(parents=True,exist_ok=True)
  shutil.copyfile(HERE/rule.name,rule); rule.chmod(0o644)
  service=overlay/'etc/init.d/astro-target-udev'; shutil.copyfile(HERE/'astro-target-udev',service); service.chmod(0o755)

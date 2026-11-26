@@ -3,5 +3,5 @@ name="Astro Bridge console account"
 extra_started_commands="save"
 depend() { need astro-data astro-firstboot; before local; }
 start() { /usr/bin/python3 /etc/wifi-bridge/console-account.py apply; }
-save() { /usr/bin/python3 /etc/wifi-bridge/console-account.py save; }
+save() { /usr/bin/python3 /etc/wifi-bridge/console-account.py save || return 1; [ ! -x /etc/init.d/astro-ssh ] || rc-service --ifstarted astro-ssh restart; }
 stop() { /usr/bin/python3 /etc/wifi-bridge/console-account.py save; }

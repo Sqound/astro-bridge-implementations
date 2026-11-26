@@ -43,9 +43,37 @@ WIFI_SEED_OFFSET = 65536
 WIFI_SEED_SIZE = 4096
 WIFI_SEED_MARKER = b'ASTRO-WIFI-SEED-1\n'
 WIFI_IMAGE_SIZE = 1210056704
+# First-boot zone, version 2 (the reader is image/common/astro_seed.py; tests keep both in step).
+SEED_V2_MARKER = b'ASTRO-SEED-2\n'
+SEED_READER_OFFSET = WIFI_SEED_OFFSET + WIFI_SEED_SIZE
+SEED_READER_MARK = b'ASTRO-SEED-READER-2\n'
+DROP_MAGIC = b'ASTRO-DROP-1\n'
+DROP_ALIGN = 4096
+# Zeros after the last archive. A vendor archive that is a ZIP (ZWO's is) ends the file with its end-of-central-directory
+# record, and libarchive then takes the whole raw image for that ZIP (it looks for the record in the last few KB), so
+# Raspberry Pi Imager would read the archive instead of the disk image. Tail zeros keep the record out of that window.
+DROP_TAIL = 1024 * 1024
+MAX_DROP_DRIVERS = 8
+MAX_DRIVER_ARCHIVE = 512 * 1024 * 1024
+# (accepted p1 types, p1 first sector, p1 sectors, p2 first sector, p2 sectors) of each known card.
+SEED_LAYOUTS = {
+    'pi5': ({0x06}, 2048, 264192, 266240, 2097152),
+    'zero-w': ({0x0b, 0x0c}, 2048, 1048576, 1050624, 2095104),
+}
+SAFE_PERSONALIZED_ERRORS = {
+    'Invalid Wi-Fi settings.', 'This image does not support Wi-Fi preparation.',
+    'The expanded image does not fit on this drive.', 'Image checksum mismatch. Nothing has been flashed.',
+    'Invalid bridge password.', 'This image does not support the bridge password or camera drivers.',
+    'The image and camera drivers do not fit on this drive.',
+    'A camera driver file changed. Nothing has been flashed.', 'Invalid camera driver request.',
+}
 
 
-def wifi_seed(settings):
+def layout_bytes(name):
+    return (SEED_LAYOUTS[name][3] + SEED_LAYOUTS[name][4]) * 512
+
+
+def wifi_payload(settings):
     """Validate without ever including credential values in errors."""
     if not isinstance(settings, dict) or set(settings) != {'ssid', 'password', 'hidden', 'country'}:
         raise ValueError('Invalid Wi-Fi settings.')
@@ -68,31 +96,150 @@ def wifi_seed(settings):
             raise ValueError
     except (ValueError, UnicodeError):
         raise ValueError('Invalid Wi-Fi settings.') from None
-    payload = json.dumps({'ssid': ssid, 'psk': psk, 'hidden': hidden, 'country': country},
-                         ensure_ascii=True, separators=(',', ':')).encode('ascii') + b'\n'
-    if len(WIFI_SEED_MARKER) + len(payload) > WIFI_SEED_SIZE:
+    return {'ssid': ssid, 'psk': psk, 'hidden': hidden, 'country': country}
+
+
+def _zone(marker, value):
+    payload = json.dumps(value, ensure_ascii=True, separators=(',', ':')).encode('ascii') + b'\n'
+    if len(marker) + len(payload) > WIFI_SEED_SIZE:
         raise ValueError('Invalid Wi-Fi settings.')
-    return WIFI_SEED_MARKER + payload + bytes(WIFI_SEED_SIZE - len(WIFI_SEED_MARKER) - len(payload))
+    return marker + payload + bytes(WIFI_SEED_SIZE - len(marker) - len(payload))
+
+
+def wifi_seed(settings):
+    """Version 1 zone: the private Wi-Fi network only (images that read nothing else)."""
+    return _zone(WIFI_SEED_MARKER, wifi_payload(settings))
+
+
+def bridge_password(value):
+    """The bridge rule (wifi_bridge/password.py): 8 to 63 printable ASCII characters, no space, not 12345678."""
+    if not isinstance(value, str) or not re.fullmatch(r'[\x21-\x7e]{8,63}', value) or value == '12345678':
+        raise ValueError('Invalid bridge password.')
+    return value
+
+
+def seed_v2(settings=None, password=None, drivers=None):
+    """Version 2 zone: each part optional. The password is the only clear value, and only here."""
+    value = {}
+    if settings is not None:
+        value['wifi'] = wifi_payload(settings)
+    if password is not None:
+        value['password'] = bridge_password(password)
+    if drivers is not None:
+        value['drivers'] = drivers
+    if not value:
+        raise ValueError('Invalid Wi-Fi settings.')
+    return _zone(SEED_V2_MARKER, value)
+
+
+def seed_layout(prefix):
+    """Name of the known card layout of an image, or None."""
+    if len(prefix) < 512 or prefix[510:512] != b'\x55\xaa' or any(prefix[478:510]):
+        return None
+    first, second = (struct.unpack_from('<B3sB3sII', prefix, 446 + 16*i) for i in range(2))
+    for name, (types, p1, p1_size, p2, p2_size) in SEED_LAYOUTS.items():
+        if (first[0], first[4], first[5]) == (0x80, p1, p1_size) and first[2] in types \
+                and (second[0], second[2], second[4], second[5]) == (0, 0x83, p2, p2_size):
+            return name
+    return None
 
 
 def check_wifi_base(prefix):
-    if len(prefix) < WIFI_SEED_OFFSET + WIFI_SEED_SIZE or prefix[510:512] != b'\x55\xaa':
-        raise ValueError('This image does not support Wi-Fi preparation.')
-    first, second = (struct.unpack_from('<B3sB3sII', prefix, 446 + 16*i) for i in range(2))
-    if (first[0], first[2], first[4], first[5]) != (0x80, 0x06, 2048, 264192) or \
-       (second[0], second[2], second[4], second[5]) != (0, 0x83, 266240, 2097152) or \
-       any(prefix[478:510]) or prefix[WIFI_SEED_OFFSET:WIFI_SEED_OFFSET + WIFI_SEED_SIZE] != \
+    if len(prefix) < WIFI_SEED_OFFSET + WIFI_SEED_SIZE or seed_layout(prefix) != 'pi5' or \
+       prefix[WIFI_SEED_OFFSET:WIFI_SEED_OFFSET + WIFI_SEED_SIZE] != \
        WIFI_SEED_MARKER + bytes(WIFI_SEED_SIZE - len(WIFI_SEED_MARKER)):
         raise ValueError('This image does not support Wi-Fi preparation.')
 
 
+def check_seed_base(prefix):
+    """Layout of an image that reads the version 2 zone: blank zone, then the reader mark."""
+    name = seed_layout(prefix)
+    if (name is None or len(prefix) < SEED_READER_OFFSET + WIFI_SEED_SIZE
+            or prefix[WIFI_SEED_OFFSET:WIFI_SEED_OFFSET + WIFI_SEED_SIZE] != WIFI_SEED_MARKER + bytes(WIFI_SEED_SIZE - len(WIFI_SEED_MARKER))
+            or prefix[SEED_READER_OFFSET:SEED_READER_OFFSET + WIFI_SEED_SIZE] != SEED_READER_MARK + bytes(WIFI_SEED_SIZE - len(SEED_READER_MARK))):
+        raise ValueError('This image does not support the bridge password or camera drivers.')
+    return name
+
+
+def _padded(size):
+    return -(-size // DROP_ALIGN) * DROP_ALIGN
+
+
+def driver_plan(drivers, image_bytes):
+    """The drop appended after the image: (header bytes, zone pointer, [(path, size, sha256, offset)], end).
+
+    drivers = {'catalog_version': ..., 'items': [...]}, as Setup sends it. Every
+    archive file is checked again here (regular file, size, SHA-256) before
+    anything is written. Nothing is unpacked or executed.
+    """
+    if (not isinstance(drivers, dict) or set(drivers) != {'catalog_version', 'items'}
+            or not isinstance(drivers['catalog_version'], str)
+            or not re.fullmatch(r'[0-9]{4}\.[0-9]{2}\.[0-9]{2}\.[0-9]{1,3}', drivers['catalog_version'])
+            or not isinstance(drivers['items'], list) or not 1 <= len(drivers['items']) <= MAX_DROP_DRIVERS):
+        raise ValueError('Invalid camera driver request.')
+    keys = {'id', 'version', 'arch', 'source', 'path', 'size', 'sha256', 'license_sha256', 'terms_url'}
+    entries, files, seen = [], [], set()
+    for item in drivers['items']:
+        if (not isinstance(item, dict) or set(item) != keys or not isinstance(item['id'], str)
+                or not re.fullmatch('[a-z][a-z0-9_]{0,31}', item['id']) or item['id'] in seen
+                or not isinstance(item['version'], str) or not re.fullmatch(r'[0-9A-Za-z][0-9A-Za-z.+-]{0,31}', item['version'])
+                or item['arch'] not in ('arm64', 'armv6') or item['source'] != 'download'
+                or not (item['license_sha256'] is None or isinstance(item['license_sha256'], str)
+                        and re.fullmatch('[0-9a-f]{64}', item['license_sha256']))
+                or not isinstance(item['terms_url'], str) or not item['terms_url'].startswith('https://')
+                or len(item['terms_url']) > 512):
+            raise ValueError('Invalid camera driver request.')
+        seen.add(item['id'])
+        entry = {key: item[key] for key in ('id', 'version', 'arch', 'source', 'license_sha256', 'terms_url')}
+        entry.update(size=None, sha256=None, offset=None)
+        entries.append(entry)
+        if (type(item['size']) is not int or not 0 < item['size'] <= MAX_DRIVER_ARCHIVE
+                or not isinstance(item['sha256'], str) or not re.fullmatch('[0-9a-f]{64}', item['sha256'])
+                or not isinstance(item['path'], str) or not os.path.isabs(item['path'])):
+            raise ValueError('Invalid camera driver request.')
+        path = Path(item['path'])
+        if path.is_symlink() or not path.is_file() or path.stat().st_size != item['size']:
+            raise ValueError('A camera driver file changed. Nothing has been flashed.')
+        with path.open('rb') as stream:
+            if hashlib.file_digest(stream, 'sha256').hexdigest() != item['sha256']:
+                raise ValueError('A camera driver file changed. Nothing has been flashed.')
+        entry.update(size=item['size'], sha256=item['sha256'])
+        files.append((len(entries) - 1, path, item['size'], item['sha256']))
+    header_size = DROP_ALIGN
+    while True:
+        offset, placed = image_bytes + header_size, []
+        for index, path, size, digest in files:
+            entries[index]['offset'] = offset
+            placed.append((path, size, digest, offset))
+            offset += _padded(size)
+        line = json.dumps({'catalog_version': drivers['catalog_version'], 'drivers': entries},
+                          ensure_ascii=True, separators=(',', ':')).encode('ascii') + b'\n'
+        needed = _padded(len(DROP_MAGIC) + len(line))
+        if needed <= header_size:
+            break
+        header_size = needed
+    if header_size > 65536:
+        raise ValueError('Invalid camera driver request.')
+    header = (DROP_MAGIC + line).ljust(header_size, b'\0')
+    pointer = {'offset': image_bytes, 'length': header_size, 'sha256': hashlib.sha256(header).hexdigest()}
+    return header, pointer, placed, _padded(offset) + DROP_TAIL
+
+
 @contextmanager
-def personalized_image(image, checksum, disk_size, settings):
-    """Create a short-lived raw image, checking the compressed source twice."""
-    seed = wifi_seed(settings)
+def personalized_image(image, checksum, disk_size, settings, password=None, drivers=None):
+    """Create a short-lived raw image, checking the compressed source twice.
+
+    The first-boot zone receives the Wi-Fi network, the bridge password and the
+    pointer to the camera drivers; the drivers follow the image, unchanged.
+    The copy lives in a private folder (0700, file 0600) removed afterwards.
+    """
+    if settings is not None:
+        wifi_payload(settings)
+    if password is not None:
+        bridge_password(password)
     if not image.name.endswith('.img.xz'):
         raise ValueError('This image does not support Wi-Fi preparation.')
-    if disk_size < WIFI_IMAGE_SIZE:
+    if disk_size < min(WIFI_IMAGE_SIZE, *(layout_bytes(name) for name in SEED_LAYOUTS)):
         raise ValueError('The expanded image does not fit on this drive.')
     verified(image, checksum)
     parent = cache_directory() / 'personalized'
@@ -104,17 +251,52 @@ def personalized_image(image, checksum, disk_size, settings):
         with image.open('rb') as source, os.fdopen(os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), 'wb') as out:
             with lzma.LZMAFile(source) as stream:
                 prefix = stream.read(1024 * 1024)
-                check_wifi_base(prefix)
+                version_2 = password is not None or bool(drivers) or seed_layout(prefix) != 'pi5' or \
+                    prefix[SEED_READER_OFFSET:SEED_READER_OFFSET + WIFI_SEED_SIZE] == SEED_READER_MARK + bytes(WIFI_SEED_SIZE - len(SEED_READER_MARK))
+                if version_2:
+                    # Never a version 2 zone in an image that only reads version 1.
+                    name = check_seed_base(prefix)
+                    expected = layout_bytes(name)
+                    plan = driver_plan(drivers, expected) if drivers else None
+                    seed = seed_v2(settings, password, plan[1] if plan else None)
+                    total = plan[3] if plan else expected
+                else:
+                    check_wifi_base(prefix)
+                    expected = total = WIFI_IMAGE_SIZE
+                    plan, seed = None, wifi_seed(settings)
+                if disk_size < expected:
+                    raise ValueError('The expanded image does not fit on this drive.')
+                if disk_size < total:
+                    raise ValueError('The image and camera drivers do not fit on this drive.')
                 prefix = prefix[:WIFI_SEED_OFFSET] + seed + prefix[WIFI_SEED_OFFSET + WIFI_SEED_SIZE:]
+                seed = None
                 size = len(prefix)
                 out.write(prefix); digest.update(prefix)
                 while chunk := stream.read(1024 * 1024):
                     size += len(chunk)
-                    if size > WIFI_IMAGE_SIZE:
+                    if size > expected:
                         raise ValueError('This image does not support Wi-Fi preparation.')
                     out.write(chunk); digest.update(chunk)
-                if size != WIFI_IMAGE_SIZE:
+                if size != expected:
                     raise ValueError('This image does not support Wi-Fi preparation.')
+            if plan:
+                header, _, files, _ = plan
+                out.write(header); digest.update(header)
+                for path, length, expected_digest, offset in files:
+                    pad = offset - out.tell()
+                    out.write(bytes(pad)); digest.update(bytes(pad))
+                    check = hashlib.sha256()
+                    with path.open('rb') as archive:
+                        while chunk := archive.read(1024 * 1024):
+                            check.update(chunk); out.write(chunk); digest.update(chunk)
+                    if check.hexdigest() != expected_digest or out.tell() != offset + length:
+                        raise ValueError('A camera driver file changed. Nothing has been flashed.')
+                end = plan[3]
+                if out.tell() > end:
+                    raise ValueError('A camera driver file changed. Nothing has been flashed.')
+                while out.tell() < end:
+                    pad = bytes(min(1024 * 1024, end - out.tell()))
+                    out.write(pad); digest.update(pad)
             source.seek(0)
             if hashlib.file_digest(source, 'sha256').hexdigest() != checksum.lower():
                 raise ValueError('Image checksum mismatch. Nothing has been flashed.')
@@ -967,7 +1149,8 @@ def setup_command():
         if request['command'] == 'list':
             emit({'media': setup_media()})
             return 0
-        if set(request) not in ({'command', 'image', 'sha256', 'disk'}, {'command', 'image', 'sha256', 'disk', 'wifi'}):
+        base = {'command', 'image', 'sha256', 'disk'}
+        if not base <= set(request) <= base | {'wifi', 'password', 'drivers'}:
             raise ValueError('Invalid setup request fields.')
         disk = request['disk']
         if not isinstance(disk, dict) or disk not in setup_media():
@@ -975,9 +1158,12 @@ def setup_command():
         image = verified(Path(request['image']), request['sha256'])
         emit({'phase': 'preparing', 'message': 'Checking expanded image size…'})
         wifi = request.get('wifi')
+        password = request.get('password')
+        drivers = request.get('drivers') or None
+        personalized = wifi is not None or password is not None or drivers is not None
         size = 0
         opener = lzma.open if image.name.endswith('.xz') else open
-        if wifi is None:
+        if not personalized:
             with opener(image, 'rb') as stream:
                 while chunk := stream.read(1024 * 1024):
                     size += len(chunk)
@@ -1000,20 +1186,19 @@ def setup_command():
             elif phase == 'preparing' and ('permission' in lower or 'authorization' in lower):
                 phase = 'authorizing'
             emit({'phase': phase, 'message': message})
-        if wifi is None:
+        if not personalized:
             write_card(image, disk, notify, request['sha256'], setup=True)
         else:
-            emit({'phase': 'preparing', 'message': 'Preparing the image with Wi-Fi settings…'})
-            with personalized_image(image, request['sha256'], disk['size'], wifi) as (raw, raw_checksum):
+            emit({'phase': 'preparing', 'message': 'Preparing the image with the first-boot settings…'})
+            with personalized_image(image, request['sha256'], disk['size'], wifi, password, drivers) as (raw, raw_checksum):
+                password = None
                 write_card(raw, disk, notify, raw_checksum, setup=True, personalized=True)
         emit({'success': True})
         return 0
     except Exception as error:
-        if isinstance(locals().get('request'), dict) and locals()['request'].get('wifi') is not None:
-            safe_errors = {'Invalid Wi-Fi settings.', 'This image does not support Wi-Fi preparation.',
-                           'The expanded image does not fit on this drive.',
-                           'Image checksum mismatch. Nothing has been flashed.'}
-            message = str(error) if isinstance(error, ValueError) and str(error) in safe_errors else 'Unable to prepare or write the personalized image.'
+        request = locals().get('request')
+        if isinstance(request, dict) and any(request.get(key) is not None for key in ('wifi', 'password', 'drivers')):
+            message = str(error) if isinstance(error, ValueError) and str(error) in SAFE_PERSONALIZED_ERRORS else 'Unable to prepare or write the personalized image.'
             emit({'error': message})
         else:
             emit({'error': str(error)})

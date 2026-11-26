@@ -17,7 +17,7 @@ import tempfile
 import time
 import urllib.request
 
-VERSION = '1.1.0'
+VERSION = '1.2.0'
 SOURCE_SHA256 = None  # Embedded by the release builder.
 
 

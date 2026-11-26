@@ -81,7 +81,8 @@ def prepare(output, snapshot):
     else:
         commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip()
         dirty=bool(subprocess.check_output(['git','status','--porcelain','--untracked-files=normal'],cwd=ROOT,text=True))
-        prefixes=('wifi_bridge','image/alpine/standard','image/alpine/openrc','image/alpine/persistence.py',
+        # image/common: SSH rule, first-boot zone reader and camera udev links shared with the Pi 5 image.
+        prefixes=('wifi_bridge','image/alpine/standard','image/alpine/openrc','image/alpine/persistence.py','image/common','cameras/catalog',
                   'scripts/tls.py','scripts/install-push-runtime.py','scripts/copy-app.py','systemd/wifi-bridge-http.service')
         names=subprocess.check_output(['git','ls-tree','-r','--name-only',commit,'--',*prefixes],cwd=ROOT,text=True).splitlines()
         files={}
@@ -281,11 +282,36 @@ def inspect_boot(boot, package_root, packages, module_listing, key_files):
             'execution_boundary':'No target ARM binaries executed; no firmware boot or physical radio/trust acceptance.'}
 
 
+def seed_module():
+    import importlib.util
+    spec=importlib.util.spec_from_file_location('astro_seed',Path(__file__).resolve().parents[2]/'common/astro_seed.py')
+    module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module);return module
+
+
+def reserve_seed(image):
+    """Reserve the first-boot zone (blank version 1 marker, then the version 2 reader mark)."""
+    seed=seed_module()
+    with image.open('r+b') as stream:
+        header=stream.read(512)
+        if seed.layout(header)!='zero-w':raise ValueError('Unexpected standard partition geometry.')
+        stream.seek(seed.SLOT_OFFSET)
+        if stream.read(2*seed.SLOT_SIZE)!=bytes(2*seed.SLOT_SIZE):raise ValueError('First-boot zone is not blank.')
+        stream.seek(seed.SLOT_OFFSET);stream.write(seed.blank_slot()+seed.reader_block())
+
+
+def seed_reserved(stream):
+    seed=seed_module()
+    stream.seek(seed.SLOT_OFFSET)
+    return stream.read(2*seed.SLOT_SIZE)==seed.blank_slot()+seed.reader_block()
+
+
 def finish(image, output):
     value=json.loads((output/'source.json').read_text());inputs=value['inputs']
     filesystems=json.loads((output/'filesystems.json').read_text())
     if filesystems!={'data_root_mode':'0700','data_root_uid':0,'data_root_gid':0}:raise ValueError('Private root-owned DATA initialization evidence missing.')
-    with image.open('rb') as stream:partition_header(stream.read(512),inputs)
+    with image.open('rb') as stream:
+        partition_header(stream.read(512),inputs)
+        if not seed_reserved(stream):raise ValueError('First-boot zone not reserved.')
     if image.stat().st_size!=inputs['image_bytes']:raise ValueError('Raw size mismatch.')
     name=f'astro-bridge-{value["version"]}-alpine-armhf-standard.img.xz'
     target=output/name
@@ -296,6 +322,9 @@ def finish(image, output):
                  package_lock=json.loads((output/'package-lock.json').read_text()),
                  kernel_packages=json.loads((output/'kernel-packages.json').read_text()),
                  mkimage_patched_sha256=(output/'mkimage-patched.sha256').read_text().split()[0],
+                 # What this image reads at first boot (image/common/astro_seed.py); no camera service here.
+                 first_boot={'zone':2,'wifi_seed':True,'password_seed':True,'driver_drop':True},
+                 cameras={'service':False},
                  asset=name)
     with image.open('rb') as source,lzma.open(target.with_suffix('.partial'),'wb',preset=3) as dest:
         while data:=source.read(1024*1024):dest.write(data)
@@ -326,6 +355,7 @@ if __name__=='__main__':
     sub.add_parser('version');sub.add_parser('stage')
     guard=sub.add_parser('guard-loop');guard.add_argument('device');guard.add_argument('backing',type=Path);guard.add_argument('offset',type=int);guard.add_argument('size',type=int)
     data=sub.add_parser('init-data');data.add_argument('path',type=Path);data.add_argument('device');data.add_argument('backing',type=Path);data.add_argument('offset',type=int);data.add_argument('size',type=int);data.add_argument('output',type=Path)
+    sub.add_parser('reserve-seed').add_argument('image',type=Path)
     finish_parser=sub.add_parser('finish');finish_parser.add_argument('image',type=Path);finish_parser.add_argument('output',type=Path)
     verify=sub.add_parser('verify-image');verify.add_argument('image',type=Path);verify.add_argument('manifest',type=Path)
     inspect=sub.add_parser('inspect');inspect.add_argument('boot',type=Path);inspect.add_argument('package_root',type=Path);inspect.add_argument('packages',type=Path);inspect.add_argument('listing',type=Path);inspect.add_argument('keys',type=Path);inspect.add_argument('output',type=Path)
@@ -337,5 +367,6 @@ if __name__=='__main__':
     elif args.action=='guard-loop':guard_loop(args.device,args.backing,args.offset,args.size)
     elif args.action=='init-data':args.output.write_text(json.dumps(initialize_data(args.path,args.device,args.backing,args.offset,args.size),indent=2)+'\n')
     elif args.action=='finish':finish(args.image,args.output)
+    elif args.action=='reserve-seed':reserve_seed(args.image)
     elif args.action=='verify-image':verify_image(args.image,json.loads(args.manifest.read_text()))
     else:args.output.write_text(json.dumps(inspect_boot(args.boot,args.package_root,json.loads(args.packages.read_text()),args.listing.read_text(),list(args.keys.glob('*.pub'))),indent=2)+'\n')

@@ -15,9 +15,9 @@ start() {
     done < /etc/wifi-bridge/camera-packages.sha256
     if [ "$status" -eq 0 ] && [ "$#" -eq 3 ]; then
         for prior in .astro-bridge-runtime .astro-display; do
-            if apk info -e "$prior" >/dev/null 2>&1; then printf "%s\n" "$prior" >> /etc/apk/world || status=1; fi
+            if /sbin/apk info -e "$prior" >/dev/null 2>&1; then printf "%s\n" "$prior" >> /etc/apk/world || status=1; fi
         done
-        [ "$status" -eq 0 ] && apk add --network=no --no-cache --force-non-repository --virtual .astro-camera "$@" || status=1
+        [ "$status" -eq 0 ] && /sbin/apk add --network=no --no-cache --force-non-repository --virtual .astro-camera "$@" || status=1
         cp /etc/wifi-bridge/base-world /etc/apk/world || status=1
     else
         status=1
