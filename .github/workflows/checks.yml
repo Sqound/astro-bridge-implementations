@@ -20,4 +20,4 @@ jobs:
       - run: python tools/test-docker-installer.py
       - run: python docker/build.py --wheel build/core/astro_bridge_core-1.2.0-py3-none-any.whl --target linux
       - run: python tools/core-artifact.py fetch --source --output build/core
-      - run: python tools/test-linux-network.py --wheel build/core/astro_bridge_core-1.2.0-py3-none-any.whl --source build/core/astro_bridge_core-1.1.1.tar.gz
+      - run: python tools/test-linux-network.py --wheel build/core/astro_bridge_core-1.2.0-py3-none-any.whl --source build/core/astro_bridge_core-1.2.0.tar.gz
